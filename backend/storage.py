@@ -6,7 +6,7 @@ from pathlib import Path
 class Store:
     def __init__(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(path)
+        self.db = sqlite3.connect(path, timeout=.02)
         self.db.row_factory = sqlite3.Row
         self.db.executescript('''
             PRAGMA journal_mode=WAL;

@@ -1238,3 +1238,28 @@ button,
     font-size: 11px;
   }
 }
+
+/* Short, physical feedback without glow or idle animation. */
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  .button,
+  .sidebar nav a {
+    transition:
+      background-color 135ms ease,
+      border-color 135ms ease,
+      color 135ms ease,
+      transform 100ms ease;
+  }
+  button:not(:disabled):active,
+  .button:active {
+    transform: translateY(1px);
+  }
+  .page-title .button > svg:last-child,
+  .recent .button > svg {
+    transition: transform 135ms ease;
+  }
+  .page-title .button:hover > svg:last-child,
+  .recent .button:hover > svg {
+    transform: translateX(2px);
+  }
+}

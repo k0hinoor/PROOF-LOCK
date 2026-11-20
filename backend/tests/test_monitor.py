@@ -97,3 +97,32 @@ class MonitorTests(unittest.TestCase):
         m.ingest(telemetry(), 10)
         self.assertTrue(m.status(10)['fresh'])
         self.assertTrue(m.storage_error)
+
+    def test_monotonic_freshness_survives_wall_clock_jump(self):
+        from unittest.mock import patch
+
+        self.m.connected = True
+        with patch('backend.monitor.time.time', return_value=100), patch('backend.monitor.time.monotonic', return_value=10):
+            self.m.ingest(telemetry())
+        with patch('backend.monitor.time.time', return_value=5), patch('backend.monitor.time.monotonic', return_value=14):
+            self.m.tick()
+            self.assertFalse(self.m.status()['fresh'])
+            self.assertEqual(self.m.status()['telemetry_age'], 4)
+
+    def test_locked_database_does_not_stall_or_hide_logging_failure(self):
+        import time
+
+        other = Store(self.path)
+        self.addCleanup(other.db.close)
+        other.db.execute('BEGIN IMMEDIATE')
+        started = time.monotonic()
+        self.m.ingest(telemetry())
+        self.assertLess(time.monotonic() - started, .75)
+        self.assertTrue(self.m.storage_error)
+        self.assertIsNotNone(self.m.latest)
+
+    def test_ambiguous_json_never_updates_telemetry(self):
+        self.m.ingest(telemetry().replace(b'"RUNNING"', b'"RUNNING", "motor": "STOPPED"'))
+        self.m.ingest(telemetry().replace(b'"back_emf_adc": 0', b'"back_emf_adc": NaN'))
+        self.assertEqual(self.m.invalid, 2)
+        self.assertIsNone(self.m.latest)

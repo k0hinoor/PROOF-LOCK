@@ -26,6 +26,8 @@ class Monitor:
         self.samples = deque(maxlen=3600)
         self.sequence = deque(maxlen=6)
         self.last_packet = self.last_telemetry = self.last_seq = None
+        self.packet_clock = self.telemetry_clock = None
+        self.session_clock = time.monotonic()
         self.meta = {}
         self.valid = self.invalid = self.missing = self.unknown = 0
         self.last_warning = ''
@@ -53,7 +55,9 @@ class Monitor:
             self.warned_at = at
 
     def ingest(self, line, at=None):
-        at = time.time() if at is None else at
+        wall = time.time()
+        at = wall if at is None else at
+        received = time.monotonic() - max(0, wall - at)
         try:
             if line is None:
                 raise ValueError('Oversized serial frame dropped')
@@ -78,9 +82,10 @@ class Monitor:
                 self.samples.append({'at': at, 'adc': None})
                 self.sequence.clear()
                 self.latest = None
-                self.last_telemetry = None
+                self.last_telemetry = self.telemetry_clock = None
         self.last_seq = seq
         self.last_packet = at
+        self.packet_clock = received
         for key in ('device', 'firmware', 'uptime_ms', 'v'):
             if key in packet:
                 self.meta[key] = packet[key]
@@ -98,10 +103,11 @@ class Monitor:
                        'Device-reported timing warning; not proof of bypass' if unusual else '', 'device', seq, at)
         elif kind == 'telemetry':
             old = self.latest
-            if self.last_telemetry is not None and at - self.last_telemetry > STALE_AFTER:
+            if self.last_telemetry is not None and (received - self.telemetry_clock > STALE_AFTER or at < self.last_telemetry):
                 self.samples.append({'at': (at + self.last_telemetry) / 2, 'adc': None})
             self.latest = {**packet, 'at': at}
             self.last_telemetry = at
+            self.telemetry_clock = received
             if self.stale_logged:
                 self.event('connection', 'TELEMETRY_RESUMED', at=at)
                 self.stale_logged = False
@@ -122,20 +128,21 @@ class Monitor:
         return bool(packet and {packet['guard_a'], packet['guard_b']} == {'OPEN', 'CLOSED'})
 
     def status(self, now=None):
-        now = time.time() if now is None else now
+        packet, telemetry = (self.last_packet, self.last_telemetry) if now is not None else (self.packet_clock, self.telemetry_clock)
+        now = time.monotonic() if now is None else now
         age = lambda stamp: None if stamp is None else max(0, now - stamp)
-        telemetry_age = age(self.last_telemetry)
+        telemetry_age = age(telemetry)
         fresh = self.connected and telemetry_age is not None and telemetry_age <= STALE_AFTER
         return dict(source=self.source, connected=self.connected, fresh=fresh, port=self.port, baud=self.baud,
-                    since=self.since, error=self.error, packet_age=age(self.last_packet), telemetry_age=telemetry_age,
+                    since=self.since, error=self.error, packet_age=age(packet), telemetry_age=telemetry_age,
                     latest=self.latest, meta=self.meta, valid=self.valid, invalid=self.invalid, missing=self.missing,
                     unknown=self.unknown, last_warning=self.last_warning, mismatch=self.mismatch(self.latest),
                     sequence=list(self.sequence), revision=self.revision, storage_error=self.storage_error)
 
     def tick(self):
         if self.connected and not self.status()['fresh'] and not self.stale_logged:
-            reference = self.last_telemetry if self.last_telemetry is not None else self.since
-            if reference is not None and time.time() - reference > STALE_AFTER:
+            reference = self.telemetry_clock if self.telemetry_clock is not None else self.session_clock
+            if time.monotonic() - reference > STALE_AFTER:
                 self.stale_logged = True
                 self.event('connection', 'TELEMETRY_STALE', 'WARNING', 'No fresh telemetry')
 

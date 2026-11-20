@@ -26,6 +26,11 @@ ROOT = Path(__file__).resolve().parents[1]
 PREVIEW = os.getenv('PROOFLOCK_PREVIEW') == '1'
 
 
+def read_available(device):
+    """Wait for one byte when idle, never for a full fixed-size frame."""
+    return device.read(max(1, min(device.in_waiting, 1024)))
+
+
 class Runtime:
     def __init__(self):
         try:
@@ -89,7 +94,9 @@ class Runtime:
                 m.event('connection', 'SERIAL_OPENED', details=f'{config.port} · {config.baud} baud')
                 framer = Framer()
                 while not self.stop.is_set():
-                    chunk = await asyncio.to_thread(device.read, 256)
+                    chunk = await asyncio.to_thread(read_available, device)
+                    if self.stop.is_set():
+                        break
                     for line in framer.feed(chunk):
                         m.ingest(line)
             except (serial.SerialException, OSError, ValueError) as exc:
@@ -232,7 +239,9 @@ async def simulator(mode: Mode):
 @app.get('/api/device/status')
 @app.get('/api/telemetry/latest')
 async def snapshot():
-    return {**status(), 'samples': list(monitor().samples)}
+    samples = monitor().samples
+    cutoff = samples[-1]['at'] - 300 if samples else 0
+    return {**status(), 'samples': [row for row in samples if row['at'] >= cutoff]}
 
 
 @app.websocket('/ws/live')
@@ -243,10 +252,21 @@ async def live(ws: WebSocket):
         return
     await ws.accept()
     try:
+        previous = None
+        last_send = 0
         while True:
-            await ws.send_json(await snapshot())
+            m = monitor()
+            summary = m.status()
+            signature = (m.revision, m.valid, m.invalid, m.connected, m.error,
+                         m.storage_error, summary['fresh'],
+                         *(int(summary[k]) if summary[k] is not None else None
+                           for k in ('packet_age', 'telemetry_age')))
+            if signature != previous or time.monotonic() - last_send >= 1:
+                await ws.send_json(await snapshot())
+                previous = signature
+                last_send = time.monotonic()
             try:
-                if (await asyncio.wait_for(ws.receive(), timeout=.7))['type'] == 'websocket.disconnect':
+                if (await asyncio.wait_for(ws.receive(), timeout=.15))['type'] == 'websocket.disconnect':
                     return
             except TimeoutError:
                 pass

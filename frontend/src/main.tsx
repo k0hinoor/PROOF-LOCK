@@ -923,7 +923,7 @@ function App() {
       <aside className="sidebar">
         <a className="brand" href="#overview">
           <span className="brand-icon">
-            <ShieldCheck size={23} />
+            <img src="/prooflock.svg" alt="" width="32" height="32" />
           </span>
           <span>
             <b>ProofLock</b>

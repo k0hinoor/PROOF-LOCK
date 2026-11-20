@@ -25,3 +25,9 @@ Use a **low-energy bench setup**, not operational machinery. This checklist test
 | RFID and export | Test accepted and denied references without UIDs; confirm privacy in the interface, database records and CSV. |
 
 Keep physical safeguard validation and risk assessment separate from these dashboard checks. Do not rely on the console to interpret safe access.
+
+## Serial stress regression
+
+The POSIX test sends a fragmented CRLF frame, followed by a burst of 1,000 valid frames interleaved with 80 oversized or invalid UTF-8 frames. It verifies the valid sample count in SQLite and verifies that a heartbeat cannot keep machine readings current. It also checks that a completed short frame is processed before the one-second serial read deadline. This is a virtual-port test, not a measurement of wire throughput or firmware latency. Other regressions hold a competing SQLite write lock, move the wall clock backwards, and reject ambiguous JSON with duplicate fields or invalid numbers.
+
+For bench sign-off, use the actual board, cable, drivers, target computer and firmware. Capture the approved baud and a few real v1 frames, repeat unplug/replug several times, and compare dashboard states against independently observed bench states. Neither the simulator nor the virtual-port test can validate the physical interlock or certify the prototype.

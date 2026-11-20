@@ -13,11 +13,22 @@ ENUMS = {
 }
 
 
+def unique_object(pairs):
+    obj = dict(pairs)
+    if len(obj) != len(pairs):
+        raise ValueError('Duplicate JSON field')
+    return obj
+
+
+def reject_constant(value):
+    raise ValueError('Non-JSON number')
+
+
 def parse(line):
     if len(line) > MAX_LINE:
         raise ValueError('Frame exceeds 512 bytes')
     try:
-        obj = json.loads(line.decode('utf-8'))
+        obj = json.loads(line.decode('utf-8'), object_pairs_hook=unique_object, parse_constant=reject_constant)
     except (ValueError, RecursionError) as exc:
         raise ValueError('Invalid JSON frame') from exc
     if not isinstance(obj, dict) or type(obj.get('v')) is not int or obj['v'] != 1:
