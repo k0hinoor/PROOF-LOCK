@@ -81,6 +81,19 @@ const query = (params: { [key: string]: string | number }) =>
       .map(([k, v]) => [k, String(v)]),
   ).toString();
 
+function telemetryNotice(s: Status) {
+  const port = `${s.port ?? "Serial port"} is open at ${s.baud ?? "unknown"} baud.`;
+  if (s.latest)
+    return `${port} Machine telemetry is stale; check that the sketch is still sending telemetry.`;
+  if (s.valid)
+    return `${port} Valid v1 packets arrived, but no telemetry frame has arrived. Check that the sketch sends type "telemetry".`;
+  if (s.invalid)
+    return `${port} Serial frames arrived but were rejected (${s.last_parse_error || "invalid frame"}). Match Serial.begin(...) and check the v1 JSON format.`;
+  if (s.rx_bytes > 0)
+    return `${port} Bytes arrived, but no complete line has arrived. Match Serial.begin(...) and end each JSON frame with a newline.`;
+  return `${port} No serial bytes received yet. Allow the Uno to reboot, then confirm the uploaded sketch actually prints to USB serial.`;
+}
+
 function Overview({
   s,
   online,
@@ -532,6 +545,11 @@ function Diagnostics({
             ["Latest telemetry sequence", t?.seq ?? "—"],
             ["Valid packets", s?.valid ?? "—"],
             ["Malformed packets", s?.invalid ?? "—"],
+            [
+              "Serial bytes received",
+              s?.source === "live" ? (s.rx_bytes ?? "—") : "—",
+            ],
+            ["Last rejected frame", s?.last_parse_error || "—"],
             ["Missing sequence count", s?.missing ?? "—"],
             ["Ignored fields", s?.unknown ?? "—"],
             ["Latest protocol warning", s?.last_warning || "—"],
@@ -1026,9 +1044,7 @@ function App() {
                   : [
                       s?.error,
                       s?.storage_error,
-                      s?.connected && !s.fresh
-                        ? "Waiting for fresh protocol v1 telemetry. Check firmware, baud rate and USB connection."
-                        : "",
+                      s?.connected && !s.fresh ? telemetryNotice(s) : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}

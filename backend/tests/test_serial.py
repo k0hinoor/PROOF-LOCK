@@ -31,6 +31,7 @@ class SerialTests(unittest.IsolatedAsyncioTestCase):
                 os.write(master, b'broken\n'+telemetry()+b'\n')
                 await self.wait_for(lambda: runtime.monitor.status()['fresh'])
                 self.assertEqual(runtime.monitor.invalid, 1)
+                self.assertEqual(runtime.monitor.status()["last_parse_error"], "Invalid JSON frame")
                 os.close(master)
                 master = None
                 await self.wait_for(lambda: not runtime.monitor.connected)
@@ -67,6 +68,7 @@ class SerialTests(unittest.IsolatedAsyncioTestCase):
                 os.write(master, frame[:30])
                 await asyncio.sleep(.06)
                 self.assertIsNone(m.latest)
+                self.assertEqual(m.status()["rx_bytes"], 30)
                 started = time.monotonic()
                 os.write(master, frame[30:]+b'\r\n')
                 await self.wait_for(lambda: m.latest is not None)
