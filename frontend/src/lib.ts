@@ -35,6 +35,31 @@ export function useMonitor() {
       retry = 0,
       watchdog = 0,
       disposed = false;
+    let streamHealthy = false;
+    let inFlight: AbortController | undefined;
+    const poll = async () => {
+      if (disposed || streamHealthy || inFlight) return;
+      const request = new AbortController();
+      inFlight = request;
+      const timeout = window.setTimeout(() => request.abort(), 2200);
+      try {
+        const response = await fetch("/api/device/status", {
+          signal: request.signal,
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Status unavailable");
+        const snapshot: Status = await response.json();
+        if (!disposed && !streamHealthy && !request.signal.aborted) {
+          setState(snapshot);
+          setLink("online");
+        }
+      } catch {
+        if (!disposed && !streamHealthy) setLink("offline");
+      } finally {
+        clearTimeout(timeout);
+        inFlight = undefined;
+      }
+    };
     const connect = () => {
       socket = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/live`,
@@ -42,6 +67,7 @@ export function useMonitor() {
       watchdog = window.setTimeout(() => socket.close(), 4000);
       socket.onmessage = (e) => {
         if (disposed) return;
+        streamHealthy = true;
         setState(JSON.parse(e.data));
         setLink("online");
         clearTimeout(watchdog);
@@ -50,14 +76,19 @@ export function useMonitor() {
       socket.onclose = () => {
         clearTimeout(watchdog);
         if (!disposed) {
-          setLink("offline");
+          streamHealthy = false;
+          void poll();
           retry = window.setTimeout(connect, 1500);
         }
       };
     };
     connect();
+    void poll();
+    const interval = window.setInterval(poll, 1000);
     return () => {
       disposed = true;
+      clearInterval(interval);
+      inFlight?.abort();
       clearTimeout(retry);
       clearTimeout(watchdog);
       socket.close();
@@ -73,6 +104,7 @@ export function useEvents(query: string, revision?: number) {
     error: string;
   }>();
   useEffect(() => {
+    if (revision === undefined) return;
     const controller = new AbortController();
     fetch(`/api/events?${query}`, { signal: controller.signal })
       .then(async (r) => {

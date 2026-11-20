@@ -990,3 +990,251 @@ dialog::backdrop {
     display: none;
   }
 }
+
+/* Terminal layout: a single status strip, a chart and one continuous instrument rail. */
+:root:not([data-theme="light"]) {
+  --bg: #101113;
+  --rail: #141517;
+  --panel: #191a1d;
+  --raised: #222327;
+  --line: #383a40;
+  --soft-line: #2c2e34;
+  --text: #efeeeb;
+  --secondary: #c6c5c2;
+  --dim: #a2a3aa;
+  --blue: #a0bbff;
+  --accent: #648dff;
+  --blue-bg: #202b46;
+}
+.shell {
+  grid-template-columns: 206px minmax(0, 1fr);
+}
+.sidebar {
+  padding: 19px 11px 13px;
+}
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: var(--accent);
+}
+.brand b {
+  font-size: 19px;
+  letter-spacing: -0.45px;
+}
+.brand small {
+  letter-spacing: 0.08em;
+}
+.nav-label {
+  margin-top: 29px;
+}
+.sidebar nav a {
+  border-radius: 4px;
+  padding-block: 9px;
+}
+.sidebar nav a.active {
+  background: var(--raised);
+  border-color: var(--line);
+  color: var(--text);
+}
+.sidebar nav a.active svg:first-child {
+  color: var(--blue);
+}
+.topbar {
+  height: 48px;
+  padding-inline: 24px;
+}
+main {
+  padding: 22px 24px 0;
+}
+.page-title {
+  margin-bottom: 16px;
+  align-items: center;
+}
+.page-title h1 {
+  font-size: 28px;
+  margin: 0 0 4px;
+}
+.sim-source {
+  color: var(--amber);
+}
+.panel,
+.button,
+button,
+.notice,
+.segment,
+.node {
+  border-radius: 5px;
+}
+.stat-grid {
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.stat-grid .stat {
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  padding: 10px 13px 11px;
+}
+.stat-grid .stat:last-child {
+  border-right: 0;
+}
+.stat-top {
+  font-size: 12px;
+  font-weight: 500;
+}
+.stat-top .icon-box {
+  width: auto;
+  height: auto;
+  background: none;
+  border: 0;
+  color: var(--dim);
+}
+.stat strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 20px;
+  margin-top: 2px;
+}
+.stat strong i {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: currentColor;
+  border-radius: 50%;
+}
+.stat small {
+  margin-top: 3px;
+}
+.overview-grid {
+  grid-template-columns: minmax(0, 2.3fr) minmax(245px, 1fr);
+  gap: 13px;
+  align-items: start;
+}
+.overview-grid > .chart-panel {
+  grid-column: 1;
+  grid-row: 1;
+}
+.overview-grid > .recent {
+  grid-column: 1;
+  grid-row: 2;
+}
+.controller-monitor {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: stretch;
+}
+.controller-monitor > .panel-head {
+  background: var(--raised);
+  border-radius: 4px 4px 0 0;
+}
+.controller-monitor > .panel {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+.controller-monitor > .panel > .panel-head {
+  padding-block: 10px;
+}
+.controller-monitor > .panel h2 {
+  font-size: 13px;
+}
+.controller-monitor .detail-rows > div {
+  min-height: 32px;
+}
+.controller-monitor .timeline li {
+  padding-block: 6px;
+}
+.chart-info {
+  border-top: 1px solid var(--soft-line);
+  padding-top: 7px;
+}
+.chart svg {
+  max-height: none;
+}
+.chart .trace {
+  stroke-width: 1.5;
+}
+.chart .trace-fill {
+  fill: var(--accent);
+  opacity: 0.14;
+}
+.chart.stale .trace-fill {
+  opacity: 0.05;
+}
+.chart line {
+  stroke: var(--line);
+}
+.recent td,
+.recent th {
+  padding-block: 6px;
+}
+@media (max-width: 1080px) {
+  .shell {
+    grid-template-columns: 178px minmax(0, 1fr);
+  }
+  main,
+  .topbar {
+    padding-inline: 16px;
+  }
+  .overview-grid {
+    grid-template-columns: minmax(0, 1.8fr) minmax(220px, 1fr);
+  }
+}
+@media (max-width: 820px) {
+  .shell {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+  .sidebar {
+    padding-inline: 6px;
+  }
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .overview-grid > .recent {
+    grid-row: 3;
+  }
+  .controller-monitor {
+    grid-row: 2;
+    grid-column: 1;
+  }
+  .stat-grid .stat:nth-child(2) {
+    border-right: 0;
+  }
+  .stat-grid .stat:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line);
+  }
+}
+@media (max-width: 570px) {
+  main,
+  .topbar {
+    padding-inline: 10px;
+  }
+  .page-title {
+    align-items: flex-start;
+  }
+  .page-title h1 {
+    font-size: 23px;
+  }
+  .sim-source {
+    display: block;
+  }
+  .stat-grid .stat {
+    padding: 8px;
+  }
+  .stat strong {
+    font-size: 15px;
+  }
+  .stat-top {
+    font-size: 11px;
+  }
+}

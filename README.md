@@ -78,6 +78,7 @@ Arduino telemetry ──USB RX──▶ pySerial reader ──▶ v1 validation 
 Physical guard interlock: independent, with no dashboard command path.
 ```
 
+- **Transport:** WebSocket streaming is preferred. The console temporarily polls the same status endpoint when a browser or preview proxy blocks the socket.
 - **Freshness:** Missing or stale live data never becomes zero or `STOPPED`. A low ADC reading never becomes `VERIFIED`; only an explicit report can supply that state. Guard disagreement is reported separately.
 - **Audit:** CSV timestamps are UTC; the UI renders local receive time. Event records distinguish device reports from dashboard observations. Unusual timing is a device-reported warning, not proof of bypass.
 - **Storage:** SQLite WAL data lives in `data/prooflock.sqlite3` by default and is ignored by Git. Set `PROOFLOCK_DB` to use a different local file. Export first if you need an archive before retention cleanup. Display and serial preferences live in your browser.

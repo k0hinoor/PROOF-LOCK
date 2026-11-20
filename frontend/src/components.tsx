@@ -93,7 +93,10 @@ export function Stat({
           <Icon size={17} />
         </span>
       </div>
-      <strong className={tone(value)}>{display(value)}</strong>
+      <strong>
+        <i className={tone(value)} aria-hidden="true" />
+        {display(value)}
+      </strong>
       <small>{caption}</small>
     </section>
   );
@@ -153,15 +156,21 @@ export function Chart({
   const X = (at: number) => 52 + ((at - min) / range) * 684;
   const Y = (adc: number) => 194 - (adc / 1024) * 170;
   let path = "",
-    pen = false;
+    pen = false,
+    fill = "",
+    end = 0;
   visible.forEach((s) => {
     if (s.adc == null) {
+      if (pen) fill += `L${end},194Z`;
       pen = false;
       return;
     }
     path += `${pen ? "L" : "M"}${X(s.at).toFixed(2)},${Y(s.adc).toFixed(2)}`;
+    end = X(s.at);
+    fill += `${pen ? "" : `M${end},194`}L${end},${Y(s.adc)}`;
     pen = true;
   });
+  if (pen) fill += `L${end},194Z`;
   return (
     <Section
       title="Back-EMF trend"
@@ -195,7 +204,9 @@ export function Chart({
             ? "LAST SESSION"
             : selected?.adc != null
               ? `${selected.adc} counts · ${clock(selected.at)}`
-              : "10-BIT INPUT"}
+              : visible.at(-1)?.adc == null
+                ? "NO CURRENT SAMPLE"
+                : `${visible.at(-1)?.adc} counts · latest`}
         </span>
       </div>
       {path ? (
@@ -242,6 +253,7 @@ export function Chart({
                 </g>
               );
             })}
+            <path className="trace-fill" d={fill} clipPath={`url(#${clip})`} />
             <path className="trace" d={path} clipPath={`url(#${clip})`} />
             {selected?.adc != null && (
               <circle cx={X(selected.at)} cy={Y(selected.adc)} r="4" />

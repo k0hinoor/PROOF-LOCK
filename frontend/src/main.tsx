@@ -115,15 +115,6 @@ function Overview({
   )?.rows[0];
   return (
     <>
-      <div className="workspace-label">
-        <span>LIVE SIGNALS</span>
-        <span>
-          <Radio size={13} />{" "}
-          {source === "simulator"
-            ? "Simulated controller"
-            : (s?.port ?? "No serial port")}
-        </span>
-      </div>
       <div className="stat-grid">
         <Stat
           title="Motor state"
@@ -152,7 +143,7 @@ function Overview({
           icon={DoorClosed}
         />
         <Stat
-          title="Lock state"
+          title="Lock feedback"
           value={t?.lock ?? "UNKNOWN"}
           caption={
             t && t.lock !== "UNKNOWN"
@@ -176,37 +167,6 @@ function Overview({
           stale={!fresh}
         />
         <Section
-          title="Machine sequence"
-          description={
-            fresh ? "Reported standstill transitions" : "No current sequence"
-          }
-          action={<Timer size={17} className="dim" />}
-          className="sequence-panel"
-        >
-          {s?.sequence.length ? (
-            <ol className={`timeline ${!fresh ? "old" : ""}`}>
-              {s.sequence.slice(0, 4).map((item, i) => (
-                <li key={`${item.at}-${i}`}>
-                  <i className={tone(item.state)} />
-                  <div>
-                    <strong>{display(item.state)}</strong>
-                    <small>
-                      {i === 0
-                        ? fresh
-                          ? "Latest reported state"
-                          : "Last received · stale"
-                        : "Received transition"}
-                    </small>
-                  </div>
-                  <time className="mono">{clock(item.at)}</time>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <Empty text="No reported transitions yet" icon={Timer} />
-          )}
-        </Section>
-        <Section
           title="Recent events"
           description="Latest records from the current data source"
           action={
@@ -228,7 +188,16 @@ function Overview({
             />
           )}
         </Section>
-        <div className="side-stack">
+        <Section
+          title="Controller monitor"
+          description={
+            source === "simulator"
+              ? "Simulated Arduino Uno"
+              : (s?.port ?? "No serial port")
+          }
+          action={<Cpu size={16} className="dim" />}
+          className="controller-monitor"
+        >
           <Section
             title="Guard channels"
             action={<DoorClosed size={17} className="dim" />}
@@ -251,6 +220,37 @@ function Overview({
                 ],
               ]}
             />
+          </Section>
+          <Section
+            title="Machine sequence"
+            description={
+              fresh ? "Reported standstill transitions" : "No current sequence"
+            }
+            action={<Timer size={17} className="dim" />}
+            className="sequence-panel"
+          >
+            {s?.sequence.length ? (
+              <ol className={`timeline ${!fresh ? "old" : ""}`}>
+                {s.sequence.slice(0, 4).map((item, i) => (
+                  <li key={`${item.at}-${i}`}>
+                    <i className={tone(item.state)} />
+                    <div>
+                      <strong>{display(item.state)}</strong>
+                      <small>
+                        {i === 0
+                          ? fresh
+                            ? "Latest reported state"
+                            : "Last received · stale"
+                          : "Received transition"}
+                      </small>
+                    </div>
+                    <time className="mono">{clock(item.at)}</time>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <Empty text="No reported transitions yet" icon={Timer} />
+            )}
           </Section>
           <Section
             title="Last RFID event"
@@ -278,7 +278,7 @@ function Overview({
               <Empty text="No RFID event recorded" icon={Fingerprint} />
             )}
           </Section>
-        </div>
+        </Section>
       </div>
     </>
   );
@@ -995,11 +995,16 @@ function App() {
         <main>
           <div className="page-title">
             <div>
-              <div className="eyebrow">
-                <span /> PROOFLOCK / MONITORING
-              </div>
               <h1>{page === "Overview" ? "Machine overview" : page}</h1>
-              <p>{subtitle}</p>
+              <p>
+                {subtitle}
+                {sim && (
+                  <span className="sim-source">
+                    {" "}
+                    · Simulated data, no hardware connected
+                  </span>
+                )}
+              </p>
             </div>
             {page !== "Settings" && (
               <a className="button" href="#settings">
@@ -1007,16 +1012,6 @@ function App() {
               </a>
             )}
           </div>
-          {sim && (
-            <div className="notice simulator">
-              <Radio size={17} />
-              <strong>Simulator mode</strong>
-              <span>
-                Viewing generated telemetry. No physical hardware is connected.
-              </span>
-              <span className="notice-tail">SIMULATED SOURCE</span>
-            </div>
-          )}
           {(!online ||
             s?.error ||
             s?.storage_error ||
