@@ -37,6 +37,8 @@ export interface Status {
   meta: { device?: string; firmware?: string; v?: number; uptime_ms?: number };
   valid: number;
   invalid: number;
+  rx_bytes: number;
+  last_parse_error: string;
   missing: number;
   unknown: number;
   last_warning: string;

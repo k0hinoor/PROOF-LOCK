@@ -97,6 +97,7 @@ class Runtime:
                     chunk = await asyncio.to_thread(read_available, device)
                     if self.stop.is_set():
                         break
+                    m.rx_bytes += len(chunk)
                     for line in framer.feed(chunk):
                         m.ingest(line)
             except (serial.SerialException, OSError, ValueError) as exc:
@@ -257,7 +258,7 @@ async def live(ws: WebSocket):
         while True:
             m = monitor()
             summary = m.status()
-            signature = (m.revision, m.valid, m.invalid, m.connected, m.error,
+            signature = (m.revision, m.valid, m.invalid, m.rx_bytes, m.connected, m.error,
                          m.storage_error, summary['fresh'],
                          *(int(summary[k]) if summary[k] is not None else None
                            for k in ('packet_age', 'telemetry_age')))

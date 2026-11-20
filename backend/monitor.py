@@ -31,6 +31,8 @@ class Monitor:
         self.meta = {}
         self.valid = self.invalid = self.missing = self.unknown = 0
         self.last_warning = ''
+        self.last_parse_error = ''
+        self.rx_bytes = 0
         self.warned_at = float('-inf')
         self.stale_logged = False
         self.revision += 1
@@ -64,7 +66,8 @@ class Monitor:
             packet, warnings, unknown = parse(line)
         except ValueError as exc:
             self.invalid += 1
-            self.warning(str(exc), at)
+            self.last_parse_error = str(exc)
+            self.warning(self.last_parse_error, at)
             return
         self.valid += 1
         self.unknown += unknown
@@ -136,7 +139,7 @@ class Monitor:
         return dict(source=self.source, connected=self.connected, fresh=fresh, port=self.port, baud=self.baud,
                     since=self.since, error=self.error, packet_age=age(packet), telemetry_age=telemetry_age,
                     latest=self.latest, meta=self.meta, valid=self.valid, invalid=self.invalid, missing=self.missing,
-                    unknown=self.unknown, last_warning=self.last_warning, mismatch=self.mismatch(self.latest),
+                    unknown=self.unknown, rx_bytes=self.rx_bytes, last_parse_error=self.last_parse_error, last_warning=self.last_warning, mismatch=self.mismatch(self.latest),
                     sequence=list(self.sequence), revision=self.revision, storage_error=self.storage_error)
 
     def tick(self):
