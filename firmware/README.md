@@ -53,6 +53,10 @@ Keep the 12 V supply **off** and the motor disconnected for these steps.
 3. **Diagnostics** should show increasing *Valid packets* and the age of the
    last telemetry under one second.
 
+If the reader is missing or wired wrong, the board sends
+`result: NOT_CONFIGURED` once at boot and then keeps the rest of the sketch
+running. That is reported in **Operators**, not hidden.
+
 ## Enrol your cards
 
 Card UIDs never leave the board, so authorised cards are stored in the sketch.
@@ -122,7 +126,9 @@ as safe.
 ## Standstill calibration (required before the lock can be released)
 
 The default sketch reports `NOT_VERIFIED` and never energises the solenoid,
-because an uncalibrated threshold cannot prove a stop.
+because an uncalibrated threshold cannot prove a stop. If the settle condition
+is met while `STANDSTILL_CALIBRATED` is `false`, the board sends one
+`CALIBRATION_REQUIRED` event and returns to idle instead of unlocking.
 
 1. Power the motor circuit and run the sequence with the dashboard open.
    Set `STANDSTILL_CALIBRATED = false` still.
@@ -162,7 +168,7 @@ release anything, or reset a fault.
 | `avrdude: stk500_recv(): programmer is not responding` | The uploader never reached the bootloader | Use a **data** USB cable, try another port, and remove anything from `D0`/`D1` |
 | `avrdude: stk500_getsync(): not in sync` | Port selected may be another device | Reselect the CH340 port; on clones try *Processor → ATmega328P (Old Bootloader)* |
 | `avrdude: programmer is not responding` after a failed upload | Bootloader timing | Press and hold **RESET**, click Upload, release when the IDE says *Uploading* |
-| `Done uploading` but nothing on the port | Sketch runs but sends nothing, or baud differs | Open Serial Monitor at 115200 and confirm telemetry lines |
+| `Done uploading` but nothing on the port | Sketch runs but sends nothing, or baud differs | Open Serial Monitor at 115200 and confirm telemetry lines. If the board is from a clone batch, also try *Processor → ATmega328P (Old Bootloader)* |
 | Port disappears during upload | Power or cable problem | Use a powered USB hub, avoid long/frayed cables |
 
 ## Known limitations
