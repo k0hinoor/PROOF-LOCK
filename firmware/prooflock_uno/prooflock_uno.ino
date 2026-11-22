@@ -111,6 +111,7 @@ MFRC522 mfrc522(PIN_RFID_SS, PIN_RFID_RST);
 Phase phase = PH_IDLE;
 uint32_t phaseSinceMs = 0;
 uint32_t settleSinceMs = 0;
+bool settleRunning = false;
 uint32_t conflictSinceMs = 0;
 uint32_t lastTelemetryMs = 0;
 uint32_t lastTagSeenMs = 0;
@@ -284,7 +285,7 @@ void startRun(uint32_t now) {
   motorState = "RUNNING";
   phase = PH_RUNNING;
   phaseSinceMs = now;
-  settleSinceMs = 0;
+  settleRunning = false;
 }
 
 void beginStop(uint32_t now) {
@@ -292,7 +293,7 @@ void beginStop(uint32_t now) {
   motorState = "STOPPING";
   phase = PH_STOPPING;
   phaseSinceMs = now;
-  settleSinceMs = 0;
+  settleRunning = false;
   conflictSinceMs = 0;
 }
 
@@ -303,7 +304,7 @@ void raiseFault(const char *code) {
   faultStandstillState = (strcmp(code, "SENSOR_CONFLICT") == 0) ? "SENSOR_FAULT" : "NOT_VERIFIED";
   phase = PH_FAULT;
   phaseSinceMs = millis();
-  settleSinceMs = 0;
+  settleRunning = false;
   sendEvent(code, "ERROR");
 }
 
@@ -393,15 +394,15 @@ void serviceRfid(uint32_t now) {
   const uint8_t *uid = mfrc522.uid.uidByte;
   const uint8_t length = mfrc522.uid.size;
 
-  if (length > sizeof(lastTagUid)) {
-    // Longer UIDs than the local table can hold are rejected, never truncated.
-    sendRfid("DENIED", nullptr);
+  if (ENROLL_MODE) {
+    printUidForEnrolment(uid, length);
     mfrc522.PICC_HaltA();
     return;
   }
 
-  if (ENROLL_MODE) {
-    printUidForEnrolment(uid, length);
+  if (length > sizeof(lastTagUid)) {
+    // Longer UIDs than the local table can hold are rejected, never truncated.
+    sendRfid("DENIED", nullptr);
     mfrc522.PICC_HaltA();
     return;
   }
@@ -457,25 +458,26 @@ void servicePhase(uint32_t now, int adc) {
 
     case PH_STOPPING: {
       if (!stopConditionMet(adc)) {
-        settleSinceMs = 0;
-      } else if (settleSinceMs == 0) {
+        settleRunning = false;
+      } else if (!settleRunning) {
+        settleRunning = true;
         settleSinceMs = now;
       }
 
-      if (settleSinceMs != 0 && now - settleSinceMs >= STANDSTILL_SETTLE_MS) {
+      if (settleRunning && now - settleSinceMs >= STANDSTILL_SETTLE_MS) {
         if (!STANDSTILL_CALIBRATED) {
           // The settle condition was met, but the threshold is still a guess.
           // Report the truth and return to idle without releasing the lock.
           motorState = "UNKNOWN";
           phase = PH_IDLE;
           phaseSinceMs = now;
-          settleSinceMs = 0;
+          settleRunning = false;
           if (!calibrationNoticeSent) {
             calibrationNoticeSent = true;
             sendEvent("CALIBRATION_REQUIRED", "WARNING");
           }
         } else {
-          settleSinceMs = 0;
+          settleRunning = false;
           releaseLock(now);
         }
       } else if (now - phaseSinceMs >= STOP_TIMEOUT_MS) {
