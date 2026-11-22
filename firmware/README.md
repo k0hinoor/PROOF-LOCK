@@ -1,0 +1,178 @@
+# ProofLock Arduino Uno firmware (demonstration build)
+
+Bench firmware for the wiring layout in the project schematic. It reads the
+MFRC522 reader, the relay and solenoid outputs, the LM393 comparator and the
+100 k / 10 k back-EMF divider, then streams **newline-delimited JSON v1**
+telemetry to the dashboard over USB.
+
+> **Not a safety device.** This is a student demonstration. It is not
+> certified, it has no redundancy, and the guard inputs are not fitted on the
+> current build. Never use it as the only safeguard on machinery that can
+> injure someone.
+
+| Item | Value |
+| --- | --- |
+| Board | Arduino Uno R3 (ATmega328P) |
+| Serial | `115200` baud, 8N1, one JSON object per line |
+| Libraries | `MFRC522` by GithubCommunity (Library Manager), `SPI` (bundled) |
+| Telemetry rate | 2 Hz |
+| Reader | MFRC522 on SPI: SS `D10`, RST `D9`, SCK `D13`, MOSI `D11`, MISO `D12` |
+| Outputs | Relay IN `D7`, solenoid gate `D8` (IRLB8314 through 220 Ω) |
+| Inputs | Comparator DO `D6`, divider midpoint `A0` |
+| Guard switches | `D2` / `D3` — **not fitted**, reported `UNKNOWN` until configured |
+
+## Upload
+
+1. Install the **MFRC522** library: Arduino IDE → *Tools → Manage Libraries* →
+   search `MFRC522` → install the GithubCommunity version.
+2. Open `firmware/prooflock_uno/prooflock_uno.ino`.
+3. Select **Tools → Board → Arduino AVR Boards → Arduino Uno** and the Uno's
+   COM port. A CH340 cable shows up as `USB-SERIAL CH340`, which is the USB
+   adapter, not the board model.
+4. Disconnect ProofLock and close Serial Monitor before uploading.
+5. Click **Upload**. "Done uploading" means the sketch is on the board; the
+   IDE does not display live readings.
+
+If the upload fails with `access is denied`, another program still holds the
+port. If it fails with `not in sync`, see [Upload troubleshooting](#upload-troubleshooting).
+
+## First run, without the motor connected
+
+Keep the 12 V supply **off** and the motor disconnected for these steps.
+
+1. Open Serial Monitor at **115200** baud. You should see one telemetry line
+   every half second, for example:
+
+   ```json
+   {"v":1,"type":"telemetry","seq":7,"device":"prooflock-uno","firmware":"bench-2.0","uptime_ms":3500,"motor":"UNKNOWN","guard_a":"UNKNOWN","guard_b":"UNKNOWN","lock":"UNKNOWN","standstill":"UNKNOWN","back_emf_adc":3}
+   ```
+
+   `UNKNOWN` is the correct value for every channel that has no sensor.
+2. Close Serial Monitor and start ProofLock, then **Settings → USB serial** →
+   COM port → **115200** → **Connect USB**.
+3. **Diagnostics** should show increasing *Valid packets* and the age of the
+   last telemetry under one second.
+
+## Enrol your cards
+
+Card UIDs never leave the board, so authorised cards are stored in the sketch.
+
+1. Set `ENROLL_MODE` to `true` and upload again.
+2. Open Serial Monitor at 115200 and tap each card. The board prints:
+
+   ```text
+   # card UID: {0xDE, 0xAD, 0xBE, 0xEF}
+   ```
+
+3. Copy the values into the table, one row per card, using a reference in the
+   form `OP-01`:
+
+   ```cpp
+   const LocalTag AUTHORIZED_TAGS[] = {
+     {4, {0xDE, 0xAD, 0xBE, 0xEF}, "OP-01"},
+     {7, {0x04, 0xA1, 0x22, 0x33, 0x44, 0x55, 0x66}, "OP-02"},
+     {0, {0}, nullptr},   // keep this terminator row last
+   };
+   ```
+
+4. Set `ENROLL_MODE` back to `false`, upload, and test again. Leave it `false`
+   during normal use: the enrolment lines are plain text, not JSON, so the
+   dashboard would count them as rejected frames. An authorised
+   card produces `RFID_ACCEPTED` in **Operators**; any other card produces
+   `RFID_DENIED`. The dashboard never sees the UID.
+
+> **3.3 V reader warning.** The MFRC522 is a 3.3 V part. Power it from the
+> Uno's **3.3 V** pin only, never from 5 V. The layout calls for a 4-channel
+> level shifter on `SDA`, `SCK`, `MOSI` and `RST`, and marks it as missing from
+> the parts list. Do not connect 5 V logic straight to the reader: fit the
+> shifter (or a resistor divider on each 5 V line) first. `MISO` is driven by
+> the reader and is fine as-is.
+
+## Relay and solenoid polarity — check before connecting 12 V
+
+With the motor disconnected, power the Uno over USB only:
+
+- The relay module's indicator LED must be **off** while the sketch is idle.
+- If it is on, your module is active-HIGH: set `RELAY_ACTIVE_LOW = false`.
+
+For the solenoid, `SOLENOID_ACTIVE_HIGH = true` matches the IRLB8314 gate
+through 220 Ω with the 10 k pull-down. The solenoid only energises after a
+verified standstill.
+
+During the bootloader window the Uno's pins are inputs, so the relay module's
+IN pin floats until `setup()` runs. On the bench, add a **10 kΩ pull-up from
+relay IN to 5 V** if your module does not already have one, so the relay cannot
+chatter while the board resets.
+
+## Guard switches (optional, not fitted)
+
+The schematic reserves `D2`/`D3` and marks guard switches as unavailable. If you
+fit switches wired to GND:
+
+```cpp
+constexpr int8_t PIN_GUARD_A = 2;
+constexpr int8_t PIN_GUARD_B = 3;
+```
+
+Both channels must agree; one open and one closed is reported as
+`GUARD_CHANNEL_MISMATCH` and **that is not a safe condition**. Until then both
+channels stay `UNKNOWN`, which the dashboard shows as unverified rather than
+as safe.
+
+## Standstill calibration (required before the lock can be released)
+
+The default sketch reports `NOT_VERIFIED` and never energises the solenoid,
+because an uncalibrated threshold cannot prove a stop.
+
+1. Power the motor circuit and run the sequence with the dashboard open.
+   Set `STANDSTILL_CALIBRATED = false` still.
+2. Watch **Overview → back-EMF** and the `back_emf_adc` values in the chart
+   while the motor coasts to rest.
+3. Note the resting noise floor (ideally under 10 counts) and the smallest
+   reading that still looks like a spinning motor. Set
+   `STANDSTILL_ADC_MAX` between them, closer to the noise floor.
+4. Check the comparator: with the motor stopped, `D6` should read `LOW`.
+   If it reads the opposite, set `COMPARATOR_LOW_MEANS_STANDSTILL = false`.
+5. Only when both checks pass on your hardware, set
+   `STANDSTILL_CALIBRATED = true` and re-upload.
+
+The 100 k / 10 k divider gives roughly 223 counts at 12 V. **Do not connect `A0`
+to a voltage above 5 V**; confirm the divider and its tolerances, and check for
+inductive spikes before wiring the motor.
+
+## What the sketch does on its own
+
+| Step | Behaviour |
+| --- | --- |
+| Scan | An authorised card while idle starts a motor run. |
+| Run | Relay is energised for `MOTOR_RUN_MS` (4 s) or until the optional stop button (`D4`, not fitted) is pressed. |
+| Stop | Relay off, state `STOPPING`, standstill `VERIFYING`. |
+| Verify | The comparator must show standstill and `A0` must stay below `STANDSTILL_ADC_MAX` for `STANDSTILL_SETTLE_MS`. |
+| Release | With `STANDSTILL_CALIBRATED = true`, `VERIFIED` is reported and the solenoid pulses for `RELEASE_MS` (3 s). |
+| Fault | `STOP_TIMEOUT` if no standstill within 6 s; `SENSOR_CONFLICT` if the comparator claims standstill while the divider reads above `MOTOR_LIVE_ADC` (half of the 12 V reading). A fault de-energises both outputs. Press the Uno's **RESET** button to clear it; the sketch never clears a fault by itself. |
+
+The dashboard is still receive-only: it cannot start the motor, stop it,
+release anything, or reset a fault.
+
+## Upload troubleshooting
+
+| Arduino IDE message | Meaning | Action |
+| --- | --- | --- |
+| `ser_open(): can't open device` / `Access is denied` | Another program holds the port | Stop ProofLock (`Ctrl+C` in its terminal), close Serial Monitor/Plotter, unplug and replug the Uno |
+| `avrdude: stk500_recv(): programmer is not responding` | The uploader never reached the bootloader | Use a **data** USB cable, try another port, and remove anything from `D0`/`D1` |
+| `avrdude: stk500_getsync(): not in sync` | Port selected may be another device | Reselect the CH340 port; on clones try *Processor → ATmega328P (Old Bootloader)* |
+| `avrdude: programmer is not responding` after a failed upload | Bootloader timing | Press and hold **RESET**, click Upload, release when the IDE says *Uploading* |
+| `Done uploading` but nothing on the port | Sketch runs but sends nothing, or baud differs | Open Serial Monitor at 115200 and confirm telemetry lines |
+| Port disappears during upload | Power or cable problem | Use a powered USB hub, avoid long/frayed cables |
+
+## Known limitations
+
+- No guard switches, lock-position sensor or motor-current sensing on the
+  current build: those channels stay `UNKNOWN` and are never inferred.
+- The solenoid command is not the same as confirmed lock feedback; the sketch
+  reports `lock: UNKNOWN`.
+- The settle threshold is a single ADC window plus one comparator input; there
+  is no independent verification.
+- Blocking calls in library reads (`PICC_IsNewCardPresent`) can delay one
+  telemetry frame by a few milliseconds. The dashboard's 3 s freshness window
+  tolerates this.

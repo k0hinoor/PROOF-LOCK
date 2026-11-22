@@ -54,8 +54,10 @@ Open **<http://127.0.0.1:8000>**. Live mode starts disconnected with unknown rea
 
 ## Connect an Arduino
 
+The bench firmware, pin table, card enrolment steps, standstill calibration and upload troubleshooting are in [`firmware/README.md`](firmware/README.md).
+
 1. Use a USB **data** cable. Run the service on the computer that the board is physically plugged into.
-2. Confirm the Uno firmware emits the [documented v1 telemetry](docs/protocol.md). The repository does **not** contain production firmware, a pin map, confirmed calibration, or a validated safety circuit. `115200` is the dashboard’s initial baud preference, not a verified hardware setting.
+2. Upload the bench firmware in [`firmware/prooflock_uno`](firmware/README.md), or confirm your own sketch emits the [documented v1 telemetry](docs/protocol.md). The included sketch is a **demonstration**, not production firmware: it has no guard switches, no lock-position sensor and no validated safety circuit, and it refuses to release the solenoid until you calibrate the standstill threshold. `115200` is the default baud in both the sketch and Settings.
 3. Close Arduino Serial Monitor or any other app using the port. In **Settings → USB serial**, refresh ports, select the Uno’s port, match its baud rate, then click **Connect USB**.
 4. Check **Diagnostics** for valid packets. An open port alone does not make data current. An event or heartbeat cannot refresh the machine snapshot; a valid telemetry packet must arrive within three seconds.
 5. If the port reappears with the same OS name after unplugging, auto-reconnect will retry it. If the OS assigns a different port, refresh the list and select it explicitly.
