@@ -1,6 +1,6 @@
 # ProofLock serial protocol v1
 
-**Proposed dashboard integration contract.** Confirm it with the firmware owner before connecting the bench prototype. No pin assignments, thresholds, calibrated voltages, or safety decisions are defined here.
+**Dashboard integration contract.** The repository ships a reference bench sketch in [`firmware/prooflock_uno`](../firmware/README.md) that emits exactly these frames at `115200` baud; confirm the contract before connecting a different firmware. No pin assignments, thresholds, calibrated voltages, or safety decisions are defined here.
 
 Use compact UTF-8 JSON objects, one per line (`LF`, or `CRLF`), with a maximum frame of 512 bytes before the newline. Use 8 data bits, no parity, 1 stop bit and no flow control. Set the same baud in firmware and Settings. Aim for telemetry at least once per second; machine state becomes stale after three seconds without a valid telemetry frame. The dashboard sends no serial commands or request/response handshake.
 
