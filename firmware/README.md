@@ -21,35 +21,6 @@ telemetry to the dashboard over USB.
 | Inputs | Comparator DO `D6`, divider midpoint `A0` |
 | Guard switches | `D2` / `D3` — **not fitted**, reported `UNKNOWN` until configured |
 
-## Test each component first
-
-`firmware/component_test/component_test.ino` checks one part at a time from the
-Serial Monitor, before you run the full firmware. Upload it, open Serial Monitor
-at **115200**, and press a key:
-
-| Key | Test | What to watch |
-| --- | --- | --- |
-| `1` | USB serial and board | The text appears, and `F_CPU` reads 16000000 Hz |
-| `2` | MFRC522 reader | `VersionReg` is not `0x00`/`0xFF`, then tap a card and note the UID |
-| `3` | Relay D7 / motor | One click on, one click off after 2 s; motor runs only with 12 V connected |
-| `4` | Solenoid D8 | A 0.5 s pulse; listen for the solenoid |
-| `5` | Comparator D6 | The D6 level changes when you turn the shaft by hand |
-| `6` | Back-EMF A0 | Resting noise floor and the reading with 12 V applied |
-| `7` | Guard inputs D2/D3 | The level changes when you short the pin to GND |
-| `s` | Stop outputs | Relay and solenoid are forced off immediately |
-| `r` | Summary | The pass/fail line for every test so far |
-
-**No stop switch is needed.** The sketch never holds an output on: the relay is
-a 2 s pulse and the solenoid a 0.5 s pulse, and any key, the board's **RESET**
-button, closing Serial Monitor, or uploading a different sketch switches both
-off. That said, keep one hand on the 12 V supply the first time you use `3` or
-`4`.
-
-The sketch prints **plain text**, not protocol JSON. Disconnect ProofLock first,
-or its Diagnostics page will count these lines as rejected frames. When you are
-finished, upload `prooflock_uno.ino` again and reconnect the dashboard at
-`115200` baud.
-
 ## Upload
 
 1. Install the **MFRC522** library: Arduino IDE → *Tools → Manage Libraries* →
