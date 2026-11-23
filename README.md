@@ -6,7 +6,7 @@ ProofLock puts the operator in front of one machine: scan a card, start and stop
 
 Runs on the connected laptop without an account, internet connection, or cloud service.
 
-[Quick start](#quick-start) · [Connect an Arduino](#connect-an-arduino) · [Serial contract](docs/protocol.md) · [Bench checklist](docs/test-plan.md) · [Project specification](ProofLock_Dashboard_PRD_and_Tech_Stack.pdf)
+[Quick start](#quick-start) · [Run locally](RUN-LOCALLY.md) · [Connect an Arduino](#connect-an-arduino) · [Serial contract](docs/protocol.md) · [Bench checklist](docs/test-plan.md) · [Project specification](ProofLock_Dashboard_PRD_and_Tech_Stack.pdf)
 
 ![ProofLock machine console in explicitly labelled simulator mode, showing motor control, guard state and the attendance log](docs/assets/overview.png)
 
@@ -54,7 +54,9 @@ npm --prefix frontend ci
 npm --prefix frontend run build
 ```
 
-Then choose the commands for your OS. Activation is not required.
+Or double-click **`start-windows.bat`** (`./start-mac-linux.sh` on macOS/Linux): it creates the environment, installs packages, builds the console, creates `config/operators.json` from the example and opens the browser. A step-by-step Hindi/English walkthrough, including the Arduino link and troubleshooting, is in [`RUN-LOCALLY.md`](RUN-LOCALLY.md).
+
+Otherwise choose the commands for your OS. Activation is not required.
 
 **Windows PowerShell**
 
