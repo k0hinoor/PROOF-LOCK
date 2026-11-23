@@ -30,6 +30,8 @@ export async function api<T>(path: string, body?: object): Promise<T> {
 export function useMonitor() {
   const [state, setState] = useState<Status>();
   const [link, setLink] = useState<"loading" | "online" | "offline">("loading");
+  const [forced, setForced] = useState(0);
+  const refresh = () => setForced((n) => n + 1);
   useEffect(() => {
     let socket: WebSocket,
       retry = 0,
@@ -93,8 +95,8 @@ export function useMonitor() {
       clearTimeout(watchdog);
       socket.close();
     };
-  }, []);
-  return { state, link };
+  }, [forced]);
+  return { state, link, refresh };
 }
 export function useEvents(query: string, revision?: number) {
   const [result, setResult] = useState<{
@@ -122,6 +124,14 @@ export function useEvents(query: string, revision?: number) {
     return () => controller.abort();
   }, [query, revision]);
   return result?.query === query ? result : undefined;
+}
+export function useClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
 }
 export function usePreference<T>(name: string, fallback: T) {
   const [value, set] = useState<T>(() => {

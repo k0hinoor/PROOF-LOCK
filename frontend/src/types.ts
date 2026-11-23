@@ -8,8 +8,36 @@ export type Standstill =
   | "VERIFIED"
   | "SENSOR_FAULT"
   | "UNKNOWN";
+export interface Operator {
+  ref: string;
+  name: string;
+}
+export interface Access {
+  operator: Operator;
+  since: number;
+  expires: number;
+  remaining: number;
+}
+export interface CommandResult {
+  action: "MOTOR_ON" | "MOTOR_OFF";
+  accepted: boolean;
+  delivered?: boolean;
+  reason: string;
+  operator: Operator | null;
+  at: number;
+}
+export interface AttendanceRow {
+  id: number;
+  at: number;
+  source: Source;
+  operator_ref: string;
+  operator_name: string;
+  result: "ACCEPTED" | "DENIED";
+}
 export interface Telemetry {
   at: number;
+  guard_fitted?: boolean | null;
+  lock_fitted?: boolean | null;
   seq: number;
   motor: Motor;
   guard_a: Guard;
@@ -47,6 +75,18 @@ export interface Status {
   revision: number;
   storage_error: string;
   samples: Sample[];
+  access: Access | null;
+  last_unauthorised: string;
+  last_command: CommandResult | null;
+  tx_commands: number;
+  guard_fitted: boolean | null;
+  lock_fitted: boolean | null;
+  operator: {
+    configured: boolean;
+    count: number;
+    error: string;
+    operators: Operator[];
+  };
 }
 export interface Record {
   id: number;

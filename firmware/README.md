@@ -174,19 +174,46 @@ The 100 k / 10 k divider gives roughly 223 counts at 12 V. **Do not connect `A0`
 to a voltage above 5 V**; confirm the divider and its tolerances, and check for
 inductive spikes before wiring the motor.
 
-## What the sketch does on its own
+## Command channel
+
+The dashboard sends newline-delimited JSON v1 commands. Only these two frames
+are acted on; everything else is ignored without a reply:
+
+```json
+{"v":1,"type":"command","seq":1,"action":"MOTOR_ON"}
+{"v":1,"type":"command","seq":2,"action":"MOTOR_OFF"}
+```
+
+`MOTOR_ON` is a **run permit**: it starts the motor from idle and must keep
+arriving at least every `RUN_PERMIT_TIMEOUT_MS` (2.5 s) for the motor to stay
+energised. If the permit stops — the dashboard closes, the cable is pulled, the
+laptop sleeps — the sketch cuts the relay and runs the normal stop sequence. The
+dashboard resends the permit about once a second while the motor runs.
+
+The command channel cannot bypass safety:
+
+- `MOTOR_ON` only reaches the relay through `startRun()`, which runs only from
+  idle, so a released guard or a fault blocks a start.
+- The unlock is still decided on the board by the comparator and divider.
+- There is no command that releases the lock, clears a fault or changes a
+  threshold.
+
+## What the sketch does
 
 | Step | Behaviour |
 | --- | --- |
-| Scan | An authorised card while idle starts a motor run. |
-| Run | Relay is energised for `MOTOR_RUN_MS` (4 s) or until the optional stop button (`D4`, not fitted) is pressed. |
-| Stop | Relay off, state `STOPPING`, standstill `VERIFYING`. |
+| Idle | Relay off. Nothing is claimed about the shaft; `standstill` is `NOT_VERIFIED` until a stop has been verified since boot. |
+| Start | On `MOTOR_ON` from idle: relay on, state `RUNNING`, standstill `NOT_VERIFIED`. |
+| Run | Stays energised while the permit keeps arriving, until `MOTOR_OFF` or the optional stop button (`D4`, not fitted) is pressed. |
+| Stop | Relay off, state `STOPPING`, standstill `VERIFYING`; the lock stays locked. |
 | Verify | The comparator must show standstill and `A0` must stay below `STANDSTILL_ADC_MAX` for `STANDSTILL_SETTLE_MS`. |
 | Release | With `STANDSTILL_CALIBRATED = true`, `VERIFIED` is reported and the solenoid pulses for `RELEASE_MS` (3 s). |
-| Fault | `STOP_TIMEOUT` if no standstill within 6 s; `SENSOR_CONFLICT` if the comparator claims standstill while the divider reads above `MOTOR_LIVE_ADC` (half of the 12 V reading). A fault de-energises both outputs. Press the Uno's **RESET** button to clear it; the sketch never clears a fault by itself. |
+| Re-latch | The shaft is expected to be turned off the release window; any movement aborts the release immediately (`RELEASE_ABORTED`). |
+| Fault | `STOP_TIMEOUT` if no standstill within 6 s; `SENSOR_CONFLICT` if the comparator claims standstill while the divider reads above `MOTOR_LIVE_ADC` (half of the 12 V reading); `LINK_LOST_STOP` when a running motor loses its permit. A fault de-energises both outputs. Press the Uno's **RESET** button to clear it; the sketch never clears a fault by itself. |
 
-The dashboard is still receive-only: it cannot start the motor, stop it,
-release anything, or reset a fault.
+A card scan only reports the access decision. It never starts the motor on its
+own: an authorised scan opens the dashboard session, and the engineer still has
+to press **MOTOR ON**.
 
 ## Upload troubleshooting
 

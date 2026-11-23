@@ -2,7 +2,8 @@
   ProofLock — Arduino Uno R3 demonstration firmware (serial protocol v1)
 
   Read the wiring notes in firmware/README.md before powering the 12 V motor.
-  The dashboard only listens on USB; it never sends commands to this sketch.
+  The dashboard talks to this sketch over USB in both directions: it receives
+  telemetry and it may send exactly two actions, MOTOR_ON and MOTOR_OFF.
 
   This sketch is a bench demonstration, not a certified machine-safety device.
   Verify the relay polarity, the comparator polarity and the standstill
@@ -10,6 +11,8 @@
 
   Quick facts
     - Serial: 115200 baud, newline-delimited JSON, one object per line.
+    - Inbound: only {"type":"command","action":"MOTOR_ON"|"MOTOR_OFF"}.
+      Anything else is ignored; there is no other write path to the machine.
     - RFID: MFRC522 on SPI (SS D10, RST D9, SCK D13, MOSI D11, MISO D12).
     - Relay module IN on D7, solenoid gate on D8, comparator DO on D6,
       back-EMF divider midpoint on A0.
@@ -41,6 +44,13 @@ constexpr int8_t PIN_STANDSTILL_DO = 6;
 constexpr int8_t PIN_BACK_EMF = A0;
 constexpr int8_t PIN_GUARD_A = -1;      // fit the guard switch on D2, then set 2
 constexpr int8_t PIN_GUARD_B = -1;      // fit the guard switch on D3, then set 3
+// Both pins must be set before this may become true. While it is false the
+// board reports CLOSED with guard_fitted=false, the dashboard shows a standing
+// "no guard interlock fitted" warning, and this build protects nothing.
+constexpr bool GUARD_INPUTS_FITTED = false;
+// Set true only when a real lock-position switch feeds a lock state here.
+// With no sensor the board sends lock "UNKNOWN" and says so explicitly.
+constexpr bool LOCK_FEEDBACK_FITTED = false;
 constexpr int8_t PIN_STOP_BUTTON = -1;  // optional stop button on D4, then set 4
 
 // Most 5 V relay modules energise on a LOW input. Check yours with the motor
@@ -74,8 +84,8 @@ constexpr bool STANDSTILL_CALIBRATED = false;
 // --------------------------------------------------------------------------
 // 4. Sequence timing
 // --------------------------------------------------------------------------
-constexpr uint32_t MOTOR_RUN_MS = 4000;
 constexpr uint32_t STOP_TIMEOUT_MS = 6000;
+constexpr uint32_t RUN_PERMIT_TIMEOUT_MS = 2500;   // dashboard must keep asking
 constexpr uint32_t RELEASE_MS = 3000;
 constexpr uint32_t RFID_REPEAT_MS = 2500;
 constexpr uint32_t SENSOR_CONFLICT_MS = 1200;
@@ -118,6 +128,12 @@ uint32_t lastTagSeenMs = 0;
 uint32_t sequence = 0;
 uint8_t lastTagUid[7];
 uint8_t lastTagLength = 0;
+
+char commandBuffer[160];
+uint8_t commandLength = 0;
+bool commandOverflow = false;
+uint32_t runPermitMs = 0;
+bool permitActive = false;
 
 bool readerReady = false;
 bool calibrationNoticeSent = false;
@@ -194,7 +210,8 @@ bool stopConditionMet(int adc) {
 // Majority of three samples, so one noisy edge does not flip a guard channel.
 const char *readGuard(int8_t pin) {
   if (pin < 0) {
-    return "UNKNOWN";
+    // No switch fitted. Nothing is claimed unless the build says so below.
+    return GUARD_INPUTS_FITTED ? "UNKNOWN" : "CLOSED";
   }
   uint8_t low = 0;
   for (uint8_t i = 0; i < 3; ++i) {
@@ -215,7 +232,70 @@ bool stopButtonPressed() {
 }
 
 // --------------------------------------------------------------------------
-// 8. Protocol v1 frames
+// 8. Inbound command channel
+//    The dashboard may send exactly two actions. No other bytes are acted on,
+//    and nothing here can override the standstill check: MOTOR_ON only reaches
+//    the relay through startRun(), which is refused unless the machine is idle.
+// --------------------------------------------------------------------------
+// Defined in the machine-sequence section below.
+void startRun(uint32_t now);
+void beginStop(uint32_t now);
+
+bool contains(const char *haystack, const char *needle) {
+  return strstr(haystack, needle) != nullptr;
+}
+
+void handleCommandLine(const char *line, uint32_t now) {
+  if (!contains(line, "\"v\":1") || !contains(line, "\"type\":\"command\"")) {
+    return;   // not ours; silently ignore
+  }
+  const bool start = contains(line, "\"action\":\"MOTOR_ON\"");
+  const bool stop = contains(line, "\"action\":\"MOTOR_OFF\"");
+  if (start == stop) {
+    return;   // missing, duplicated or unknown action
+  }
+  if (stop) {
+    permitActive = false;
+    if (phase == PH_RUNNING) {
+      beginStop(now);
+    }
+    return;
+  }
+  // MOTOR_ON acts as both the start request and the run permit that keeps the
+  // motor energised. If the permit stops arriving, the motor is stopped.
+  runPermitMs = now;
+  permitActive = true;
+  if (phase == PH_IDLE) {
+    startRun(now);
+  }
+}
+
+void serviceCommands(uint32_t now) {
+  while (Serial.available() > 0) {
+    const char c = (char)Serial.read();
+    if (c == '\n') {
+      if (!commandOverflow) {
+        commandBuffer[commandLength] = '\0';
+        handleCommandLine(commandBuffer, now);
+      }
+      commandLength = 0;
+      commandOverflow = false;
+    } else if (c != '\r') {
+      if ((uint16_t)(commandLength + 1) < sizeof(commandBuffer)) {
+        commandBuffer[commandLength++] = c;
+      } else {
+        commandOverflow = true;   // oversized frame: drop the whole line
+      }
+    }
+  }
+}
+
+bool linkAlive(uint32_t now) {
+  return permitActive && (now - runPermitMs) <= RUN_PERMIT_TIMEOUT_MS;
+}
+
+// --------------------------------------------------------------------------
+// 9. Protocol v1 frames
 // --------------------------------------------------------------------------
 void sendEvent(const char *code, const char *severity) {
   Serial.print(F("{\"v\":1,\"type\":\"event\",\"seq\":"));
@@ -270,7 +350,14 @@ void sendTelemetry(int adc) {
   Serial.print(readGuard(PIN_GUARD_B));
   // No lock-position sensor is fitted on the demonstration build, so the
   // solenoid command is never reported as sensed lock feedback.
-  Serial.print(F("\",\"lock\":\"UNKNOWN\",\"standstill\":\""));
+  Serial.print(LOCK_FEEDBACK_FITTED
+                    ? F("\",\"lock\":\"LOCKED\"")   // replace with sensed input
+                    : F("\",\"lock\":\"UNKNOWN\""));
+  Serial.print(F(",\"lock_fitted\":"));
+  Serial.print(LOCK_FEEDBACK_FITTED ? F("true") : F("false"));
+  Serial.print(F(",\"guard_fitted\":"));
+  Serial.print(GUARD_INPUTS_FITTED ? F("true") : F("false"));
+  Serial.print(F(",\"standstill\":\""));
   Serial.print(standstillState);
   Serial.print(F("\",\"back_emf_adc\":"));
   Serial.print(adc);
@@ -278,7 +365,7 @@ void sendTelemetry(int adc) {
 }
 
 // --------------------------------------------------------------------------
-// 9. Machine sequence (this is the prototype's own control logic)
+// 10. Machine sequence (this is the prototype's own control logic)
 // --------------------------------------------------------------------------
 void startRun(uint32_t now) {
   relayOn();
@@ -344,7 +431,7 @@ void refreshStandstill(int adc) {
 }
 
 // --------------------------------------------------------------------------
-// 10. Per-loop services
+// 11. Per-loop services
 // --------------------------------------------------------------------------
 bool matchesAuthorisedTag(const uint8_t *uid, uint8_t length, const char **reference) {
   for (const LocalTag &tag : AUTHORIZED_TAGS) {
@@ -417,14 +504,9 @@ void serviceRfid(uint32_t now) {
   const char *reference = nullptr;
   const bool allowed = matchesAuthorisedTag(uid, length, &reference);
 
-  if (allowed) {
-    sendRfid("ACCEPTED", reference);
-    if (phase == PH_IDLE) {
-      startRun(now);
-    }
-  } else {
-    sendRfid("DENIED", nullptr);
-  }
+  // The card only reports the access decision. Motion needs an explicit
+  // MOTOR_ON command from an authenticated dashboard session.
+  sendRfid(allowed ? "ACCEPTED" : "DENIED", allowed ? reference : nullptr);
 
   mfrc522.PICC_HaltA();
 }
@@ -451,8 +533,13 @@ void serviceSensorConflict(uint32_t now, int adc) {
 void servicePhase(uint32_t now, int adc) {
   switch (phase) {
     case PH_RUNNING:
-      if (stopButtonPressed() || now - phaseSinceMs >= MOTOR_RUN_MS) {
+      // The motor keeps running until MOTOR_OFF, the optional stop button, or
+      // a lost link. There is no timed stop: the engineer decides.
+      if (stopButtonPressed() || !linkAlive(now)) {
         beginStop(now);
+        if (!linkAlive(now)) {
+          sendEvent("LINK_LOST_STOP", "WARNING");
+        }
       }
       break;
 
@@ -512,7 +599,7 @@ void servicePhase(uint32_t now, int adc) {
 }
 
 // --------------------------------------------------------------------------
-// 11. Setup and loop
+// 12. Setup and loop
 // --------------------------------------------------------------------------
 void setup() {
   // Drive the safe level into the port latch *before* the pin becomes an
@@ -553,9 +640,17 @@ void setup() {
   const uint32_t now = millis();
   phaseSinceMs = now;
   lastTelemetryMs = now;
+  runPermitMs = now - RUN_PERMIT_TIMEOUT_MS;   // no permit until one arrives
   const int adc = readBackEmf();
   refreshStandstill(adc);
   sendEvent("FIRMWARE_STARTED", "INFO");
+  if (!GUARD_INPUTS_FITTED) {
+    // Loud on purpose: this build has no guard interlock of its own.
+    sendEvent("GUARD_INPUTS_NOT_FITTED", "WARNING");
+  }
+  if (!LOCK_FEEDBACK_FITTED) {
+    sendEvent("LOCK_FEEDBACK_NOT_FITTED", "WARNING");
+  }
   sendTelemetry(adc);
 }
 
@@ -563,6 +658,7 @@ void loop() {
   const uint32_t now = millis();
   const int adc = readBackEmf();
 
+  serviceCommands(now);
   serviceRfid(now);
   serviceSensorConflict(now, adc);
   servicePhase(now, adc);

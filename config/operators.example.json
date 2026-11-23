@@ -1,0 +1,7 @@
+{
+  "operators": [
+    { "ref": "OP-01", "name": "Engineer A" },
+    { "ref": "OP-02", "name": "Engineer B" },
+    { "ref": "OP-03", "name": "Engineer C" }
+  ]
+}

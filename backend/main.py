@@ -1,4 +1,4 @@
-"""Local, same-origin monitoring API. Run with one Uvicorn worker."""
+"""Local, same-origin control API for the bench. Run with one Uvicorn worker."""
 import asyncio
 import csv
 import io
@@ -18,12 +18,18 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from serial.tools.list_ports import comports
 
-from .monitor import Monitor, demonstration
-from .protocol import Framer
+from .access import OperatorRegistry
+from .monitor import Monitor
+from .protocol import Framer, command_line
+from .simulator import DemoMachine
 from .storage import Store
 
 ROOT = Path(__file__).resolve().parents[1]
 PREVIEW = os.getenv('PROOFLOCK_PREVIEW') == '1'
+# In preview the runtime always drives the simulator and no serial port can be
+# opened, so these calls cannot reach hardware. Everything else stays blocked.
+PREVIEW_WRITES = ('/api/access/simulate', '/api/access/logout', '/api/access/expire',
+                  '/api/control')
 
 
 def read_available(device):
@@ -37,52 +43,102 @@ class Runtime:
             store = Store(os.getenv('PROOFLOCK_DB', ROOT / 'data' / 'prooflock.sqlite3'))
         except (OSError, sqlite3.Error):
             store = None
-        self.monitor = Monitor(store)
+        self.registry = OperatorRegistry()
+        self.monitor = Monitor(store, self.registry)
         if not store:
             self.monitor.storage_error = 'Local database could not be opened.'
         self.task = None
         self.stop = asyncio.Event()
         self.lock = asyncio.Lock()
+        self.device = None          # open pyserial handle while live
+        self.writer = None          # serialises writes to that handle
+        self.command_seq = 0
+        self.demo = None            # DemoMachine while the simulator runs
 
     async def halt(self):
         if self.task:
             self.stop.set()
             await self.task
             self.task = None
+        self.device = self.writer = None
         if self.monitor.connected:
             self.monitor.event('connection', 'MONITOR_DISCONNECTED')
         self.monitor.connected = False
         self.monitor.since = None
         self.monitor.error = ''
+        self.monitor.access = None
 
+    # -- simulator -----------------------------------------------------
     def start_demo(self):
         m = self.monitor
         m.reset()
         m.source, m.connected, m.since = 'simulator', True, time.time()
-        start = m.since - 119
-        m.event('connection', 'SIMULATOR_STARTED', at=start)
-        for step in range(85, 205):
-            self.demo_frame(step, start+step-85)
+        self.demo = DemoMachine()
+        now = time.time()
+        # Warm a short trail so the console does not open empty.
+        for offset in range(90, 0, -1):
+            self.demo_at(now - offset)
+        m.event('connection', 'SIMULATOR_STARTED')
         self.stop = asyncio.Event()
-        self.task = asyncio.create_task(self.demo(205))
+        self.task = asyncio.create_task(self.simulate())
 
-    def demo_frame(self, step, at):
-        m = self.monitor
-        m.ingest(json.dumps(demonstration(step)).encode(), at)
-        if step % 180 in (12, 47, 82):
-            m.ingest(json.dumps(dict(v=1, type='rfid', seq=step*2+1,
-                                     result='DENIED' if step % 180 == 47 else 'ACCEPTED', operator_ref='OP-02')).encode(), at)
-        else:
-            m.ingest(json.dumps(dict(v=1, type='heartbeat', seq=step*2+1)).encode(), at)
+    def demo_at(self, at):
+        if not self.demo:
+            return
+        for frame in self.demo.step(at, .25):
+            self.monitor.ingest(json.dumps(frame).encode(), at)
 
-    async def demo(self, step):
+    async def simulate(self):
         while not self.stop.is_set():
             try:
-                await asyncio.wait_for(self.stop.wait(), timeout=1)
+                await asyncio.wait_for(self.stop.wait(), timeout=.25)
             except TimeoutError:
-                self.demo_frame(step, time.time())
-                step += 1
+                self.demo_at(time.time())
 
+    async def command(self, action, permit=False):
+        """Validate, then deliver to the simulator or the serial port."""
+        m = self.monitor
+        ok, _, payload = m.command(action, permit=permit)
+        if permit:
+            # A keepalive carries no history and cannot start anything. It only
+            # refreshes the run permit the board expects while already running.
+            # The simulator has no permit to refresh, so nothing is written.
+            if ok and m.source != 'simulator':
+                await self.deliver(payload)
+            return payload
+        if not ok:
+            return payload
+        if m.source == 'simulator' and self.demo:
+            applied, message = self.demo.command(action, payload['at'])
+            payload['delivered'] = applied
+            payload['reason'] = message if applied else message
+            if applied:
+                self.demo_at(time.time())
+        else:
+            await self.deliver(payload)
+        m.last_command = payload
+        return payload
+
+    async def deliver(self, payload):
+        """Write one command frame to the open serial port, if any."""
+        m = self.monitor
+        if self.device and self.writer:
+            self.command_seq += 1
+            frame = command_line(payload['action'], self.command_seq % 2**32)
+            try:
+                async with self.writer:
+                    await asyncio.to_thread(self.device.write, frame)
+                payload['delivered'] = True
+            except (serial.SerialException, OSError) as exc:
+                payload['delivered'] = False
+                payload['reason'] = f'Could not write to the serial port ({type(exc).__name__})'
+                m.event('control', 'COMMAND_FAILED', 'ERROR', payload['reason'])
+        else:
+            payload['delivered'] = False
+            payload['reason'] = 'No serial link is open'
+        return payload
+
+    # -- serial --------------------------------------------------------
     async def serial_reader(self, config):
         m = self.monitor
         while not self.stop.is_set():
@@ -92,6 +148,8 @@ class Runtime:
                 m.reset()
                 m.port, m.baud, m.connected, m.since = config.port, config.baud, True, time.time()
                 m.event('connection', 'SERIAL_OPENED', details=f'{config.port} · {config.baud} baud')
+                self.device = device
+                self.writer = asyncio.Lock()
                 framer = Framer()
                 while not self.stop.is_set():
                     chunk = await asyncio.to_thread(read_available, device)
@@ -110,6 +168,7 @@ class Runtime:
                     m.error = error
                     m.event('connection', 'SERIAL_UNAVAILABLE', 'WARNING', error)
             finally:
+                self.device = self.writer = None
                 if device is not None:
                     with suppress(OSError, serial.SerialException):
                         await asyncio.to_thread(device.close)
@@ -117,6 +176,7 @@ class Runtime:
                 break
             with suppress(TimeoutError):
                 await asyncio.wait_for(self.stop.wait(), timeout=2)
+
 
 
 @asynccontextmanager
@@ -140,7 +200,7 @@ async def lifespan(app):
             runtime.monitor.store.db.close()
 
 
-app = FastAPI(title='ProofLock', version='1.0.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='ProofLock', version='2.0.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 def same_origin(origin, host):
@@ -151,15 +211,24 @@ def same_origin(origin, host):
         return False
 
 
+def loopback(request):
+    return request.url.hostname in ('localhost', '127.0.0.1', '::1') or request.url.hostname is None
+
+
 @app.middleware('http')
 async def local_boundary(request, call_next):
-    if not PREVIEW and request.url.hostname not in ('localhost', '127.0.0.1', '::1'):
+    if not PREVIEW and not loopback(request):
         return JSONResponse({'detail': 'Local dashboard only'}, 403)
     if request.method not in ('GET', 'HEAD') and not same_origin(
             request.headers.get('origin', ''), request.headers.get('host')):
         return JSONResponse({'detail': 'Same-origin request required'}, 403)
-    if PREVIEW and request.method not in ('GET', 'HEAD'):
-        return JSONResponse({'detail': 'Preview is simulator-only and read-only'}, 403)
+    if PREVIEW and request.method not in ('GET', 'HEAD') and request.url.path not in PREVIEW_WRITES:
+        return JSONResponse({'detail': 'Preview only accepts simulator input'}, 403)
+    # The browser is the only client this service has. Requiring the JSON
+    # content type on writes blocks simple cross-site form posts.
+    if request.method == 'POST' and request.url.path.startswith('/api/'):
+        if not request.headers.get('content-type', '').startswith('application/json'):
+            return JSONResponse({'detail': 'JSON content type required'}, 415)
     response = await call_next(request)
     response.headers['Cache-Control'] = 'no-store' if request.url.path.startswith('/api/') else 'no-cache'
     return response
@@ -180,6 +249,15 @@ class Cleanup(BaseModel):
     days: int = Field(ge=1, le=3650)
 
 
+class Command(BaseModel):
+    action: str
+    permit: bool = False
+
+
+class SimulatedCard(BaseModel):
+    ref: str = Field(min_length=3, max_length=9)
+
+
 def monitor():
     return app.state.runtime.monitor
 
@@ -196,6 +274,50 @@ async def health():
 @app.get('/api/ports')
 async def ports():
     return [] if PREVIEW else [{'port': p.device, 'description': p.description} for p in await asyncio.to_thread(comports)]
+
+
+@app.get('/api/operators')
+async def operators():
+    """Display names only. Card identifiers never reach the browser."""
+    return monitor().registry.public()
+
+
+@app.post('/api/operators/reload')
+async def reload_operators():
+    monitor().registry.reload()
+    monitor().revision += 1
+    return monitor().registry.public()
+
+
+@app.post('/api/access/logout')
+async def logout():
+    monitor().sign_out('operator signed out')
+    return status()
+
+
+@app.post('/api/access/expire')
+async def expire():
+    """Lock the console without touching the machine (session lock)."""
+    monitor().sign_out('console locked')
+    return status()
+
+
+@app.post('/api/access/simulate')
+async def simulate_card(card: SimulatedCard):
+    """Present a card at the *simulator* reader. Refused on live hardware."""
+    runtime = app.state.runtime
+    if runtime.monitor.source != 'simulator' or not runtime.demo:
+        raise HTTPException(409, 'Card simulation is only available while the simulator runs')
+    runtime.demo.present_card(card.ref)
+    return {'status': 'presented'}
+
+
+@app.post('/api/control')
+async def control(command: Command):
+    if command.action not in ('MOTOR_ON', 'MOTOR_OFF'):
+        raise HTTPException(400, 'Unsupported command')
+    payload = await app.state.runtime.command(command.action, command.permit)
+    return {**payload, 'status': status()}
 
 
 @app.post('/api/device/connect')
@@ -299,6 +421,30 @@ async def events(source: str = 'live', since: float = Query(0, ge=0), category: 
     return {'rows': data[:limit], 'more': len(data) > limit}
 
 
+@app.get('/api/attendance')
+async def attendance(source: str = 'live', since: float = Query(0, ge=0), search: str = Query('', max_length=100),
+                     offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
+    check_source(source)
+    try:
+        rows = list(database().rows('attendance', source, since, search=search, limit=limit+1, offset=offset))
+    except sqlite3.Error as exc:
+        raise HTTPException(503, 'Could not read attendance') from exc
+    for row in rows:
+        row['result'] = 'ACCEPTED' if row['result'] == 'ACCEPTED' else 'DENIED'
+    return {'rows': rows[:limit], 'more': len(rows) > limit}
+
+
+@app.get('/api/commands')
+async def commands(source: str = 'live', since: float = Query(0, ge=0), offset: int = Query(0, ge=0),
+                   limit: int = Query(25, ge=1, le=100)):
+    check_source(source)
+    try:
+        rows = list(database().rows('commands', source, since, limit=limit+1, offset=offset))
+    except sqlite3.Error as exc:
+        raise HTTPException(503, 'Could not read command history') from exc
+    return {'rows': rows[:limit], 'more': len(rows) > limit}
+
+
 def utc(value):
     return datetime.fromtimestamp(value, timezone.utc).isoformat()
 
@@ -311,12 +457,16 @@ def csv_row(values):
 
 @app.get('/api/events/export')
 @app.get('/api/telemetry/export')
+@app.get('/api/attendance/export')
 async def export(request: Request, source: str = 'live', since: float = Query(0, ge=0), category: str = '',
                  severity: str = '', search: str = Query('', max_length=100), until: float = Query(4102444800, ge=0)):
     check_source(source)
     db = database()
-    table = 'events' if 'events' in request.url.path else 'samples'
-    fields = ['id', 'at', 'source', 'origin', 'category', 'code', 'severity', 'details', 'seq'] if table == 'events' else ['id', 'at', 'source', 'adc', 'seq']
+    path = request.url.path
+    table = 'events' if 'events' in path else 'attendance' if 'attendance' in path else 'samples'
+    fields = {'events': ['id', 'at', 'source', 'origin', 'category', 'code', 'severity', 'details', 'seq'],
+              'attendance': ['id', 'at', 'source', 'operator_ref', 'operator_name', 'result'],
+              'samples': ['id', 'at', 'source', 'adc', 'seq']}[table]
     options = dict(source=source, since=since, category=category, severity=severity, search=search, limit=None)
     async def stream():
         exported = utc(time.time())

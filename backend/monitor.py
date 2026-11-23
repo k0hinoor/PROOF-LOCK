@@ -3,17 +3,22 @@ import sqlite3
 import time
 from collections import deque
 
+from .access import Access
 from .protocol import parse
 
 STALE_AFTER = 3
 
 
 class Monitor:
-    def __init__(self, store):
+    def __init__(self, store, registry=None):
         self.store = store
+        self.registry = registry
         self.source = 'live'
         self.storage_error = ''
         self.revision = 0
+        self.access = None
+        self.last_unauthorised = ''
+        self.last_command = None
         self.reset()
 
     def reset(self):
@@ -33,6 +38,8 @@ class Monitor:
         self.last_warning = ''
         self.last_parse_error = ''
         self.rx_bytes = 0
+        self.tx_commands = 0
+        self.permits = 0
         self.warned_at = float('-inf')
         self.stale_logged = False
         self.revision += 1
@@ -56,6 +63,129 @@ class Monitor:
             self.event('protocol', 'PROTOCOL_WARNING', 'WARNING', message, at=at)
             self.warned_at = at
 
+    # ------------------------------------------------------------------
+    # Access sessions
+    # ------------------------------------------------------------------
+    def session(self, now=None):
+        """The live session, or None once it has expired."""
+        if self.access and not self.access.alive(now):
+            self.access = None
+        return self.access
+
+    def sign_out(self, reason='operator signed out'):
+        self.last_unauthorised = ''
+        if self.access:
+            ref, self.access = self.access.ref, None
+            self.event('access', 'SESSION_ENDED', details=f'{ref} · {reason}')
+            self.revision += 1
+
+    def _rfid(self, packet, at):
+        result, ref = packet['result'], packet['operator_ref']
+        name = self.registry.name_for(ref) if (self.registry and ref) else None
+        if result == 'ACCEPTED' and name:
+            self.access = Access(ref, name, at)
+            self.save('attendance_event', at, self.source, ref, name, 'ACCEPTED')
+            self.event('access', 'ACCESS_GRANTED', details=f'{ref} · {name}', at=at)
+            self.last_unauthorised = ''
+        else:
+            self.sign_out('card denied at the reader')
+            why = ('card not registered' if result == 'ACCEPTED'
+                   else 'reader not configured' if result == 'NOT_CONFIGURED'
+                   else 'denied by reader')
+            self.event('access', 'ACCESS_DENIED', 'WARNING',
+                       f'{ref} · {why}' if ref else why, at=at)
+            self.last_unauthorised = why
+        self.revision += 1
+
+    # ------------------------------------------------------------------
+    # Control
+    # ------------------------------------------------------------------
+    def readiness(self, now=None):
+        """Why MOTOR_ON is allowed or refused. Every check fails closed.
+
+        Freshness is measured on monotonic clocks, so this deliberately calls
+        ``status()`` without a wall-clock argument.
+        """
+        latest = self.latest
+        if not self.connected or latest is None:
+            return False, 'Machine feedback is not current'
+        if not self.status()['fresh']:
+            return False, 'Machine feedback is not current'
+        if latest['motor'] == 'RUNNING':
+            return False, 'Motor is already running'
+        if latest['motor'] == 'STOPPING':
+            return False, 'Motor is still stopping'
+        if latest['motor'] == 'FAULT' or latest['standstill'] == 'SENSOR_FAULT':
+            return False, 'Safety system fault'
+        fitted = self.latest.get('guard_fitted')
+        if fitted:
+            if latest['guard_a'] != 'CLOSED' or latest['guard_b'] != 'CLOSED':
+                return False, 'Both guard inputs must report CLOSED'
+        elif fitted is not False:
+            if latest['guard_a'] not in ('CLOSED',) or latest['guard_b'] not in ('CLOSED',):
+                return False, 'Guard inputs are not reported'
+        lock_fitted = self.latest.get('lock_fitted')
+        if lock_fitted is not False:
+            if latest['lock'] == 'RELEASED':
+                return False, 'Guard lock is released'
+            if latest['lock'] != 'LOCKED':
+                return False, 'Guard lock is not confirmed'
+        return True, 'All checks passed'
+
+    def command(self, action, now=None, permit=False):
+        """Validate one motor command. Returns (accepted, reason, payload).
+
+        MOTOR_ON runs every safety gate. MOTOR_OFF only needs a signed-in
+        operator and current feedback: stopping must stay available whenever
+        the machine is actually running.
+
+        ``permit`` refreshes the board's run permit for a motor that is already
+        running. It is a keepalive, not an operator action: it is never saved
+        as a command, never replaces the last operation and cannot start
+        anything.
+        """
+        now = time.time() if now is None else now
+        session = self.session(now)
+        status = self.status(now)
+        latest = status['latest']
+        ok, why = False, 'Sign in with an RFID card first'
+        if action not in ('MOTOR_ON', 'MOTOR_OFF') or (permit and action != 'MOTOR_ON'):
+            ok, why = False, 'Unsupported action'
+        elif session:
+            if not status['fresh'] or not latest:
+                ok, why = False, 'Machine feedback is not current'
+            elif permit:
+                ok, why = ((True, 'Run permit refreshed') if latest['motor'] == 'RUNNING'
+                           else (False, 'Motor is not running'))
+            elif action == 'MOTOR_ON':
+                ok, why = self.readiness(now)
+            elif latest['motor'] == 'STOPPING':
+                ok, why = False, 'Motor is already stopping'
+            elif latest['motor'] != 'RUNNING':
+                ok, why = False, 'Motor is not running'
+            else:
+                ok, why = True, 'Stop requested'
+        payload = {'action': action, 'accepted': ok, 'reason': why,
+                   'operator': {'ref': session.ref, 'name': session.name} if session else None,
+                   'at': now}
+        if permit:
+            if ok:
+                self.permits += 1
+            return ok, why, payload
+        if ok:
+            self.last_command = payload
+            self.tx_commands += 1
+            self.event('control', 'COMMAND_SENT', details=f'{action} · {session.ref}', at=now)
+        else:
+            self.event('control', 'COMMAND_REFUSED', 'WARNING', f'{action} · {why}', at=now)
+        self.save('command', now, self.source, session.ref if session else '',
+                  session.name if session else '', action, ok, why)
+        self.revision += 1
+        return ok, why, payload
+
+    # ------------------------------------------------------------------
+    # Ingest
+    # ------------------------------------------------------------------
     def ingest(self, line, at=None):
         wall = time.time()
         at = wall if at is None else at
@@ -96,9 +226,7 @@ class Monitor:
             self.warning('; '.join(warnings), at)
         kind = packet['type']
         if kind == 'rfid':
-            ref = packet['operator_ref'] or 'Unknown operator'
-            self.event('rfid', 'RFID_' + packet['result'], 'NOTICE' if packet['result'] == 'DENIED' else 'INFO',
-                       ref, 'device', seq, at)
+            self._rfid(packet, at)
         elif kind in ('diagnostic', 'event'):
             unusual = packet['code'] in ('POSSIBLE_BYPASS_PATTERN', 'UNUSUAL_EVENT_TIMING')
             self.event(kind, 'UNUSUAL_EVENT_TIMING' if unusual else packet['code'],
@@ -136,11 +264,18 @@ class Monitor:
         age = lambda stamp: None if stamp is None else max(0, now - stamp)
         telemetry_age = age(telemetry)
         fresh = self.connected and telemetry_age is not None and telemetry_age <= STALE_AFTER
+        session = self.session()
         return dict(source=self.source, connected=self.connected, fresh=fresh, port=self.port, baud=self.baud,
                     since=self.since, error=self.error, packet_age=age(packet), telemetry_age=telemetry_age,
-                    latest=self.latest, meta=self.meta, valid=self.valid, invalid=self.invalid, missing=self.missing,
+                    latest=self.latest, meta=self.meta,
+                    guard_fitted=bool(self.latest.get('guard_fitted')) if self.latest else None,
+                    lock_fitted=bool(self.latest.get('lock_fitted')) if self.latest else None, valid=self.valid, invalid=self.invalid, missing=self.missing,
                     unknown=self.unknown, rx_bytes=self.rx_bytes, last_parse_error=self.last_parse_error, last_warning=self.last_warning, mismatch=self.mismatch(self.latest),
-                    sequence=list(self.sequence), revision=self.revision, storage_error=self.storage_error)
+                    sequence=list(self.sequence), revision=self.revision, storage_error=self.storage_error,
+                    access=session.public() if session else None, last_unauthorised=self.last_unauthorised,
+                    last_command=self.last_command, tx_commands=self.tx_commands,
+                    operator=self.registry.public() if self.registry else {'configured': False, 'count': 0,
+                                                                            'error': 'No registry', 'operators': []})
 
     def tick(self):
         if self.connected and not self.status()['fresh'] and not self.stale_logged:

@@ -172,28 +172,7 @@ export function Chart({
   });
   if (pen) fill += `L${end},194Z`;
   return (
-    <Section
-      title="Back-EMF trend"
-      description="Raw analog input · ADC counts"
-      className="chart-panel"
-      action={
-        <div className="segment" aria-label="Chart range">
-          {[
-            [30, "30s"],
-            [120, "2m"],
-            [300, "5m"],
-          ].map(([v, n]) => (
-            <button
-              key={v}
-              aria-pressed={range === v}
-              onClick={() => setRange(Number(v))}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-      }
-    >
+    <div className="chart-panel">
       <div className="chart-info">
         <span>
           <i />
@@ -210,7 +189,7 @@ export function Chart({
         </span>
       </div>
       {path ? (
-        <div className={stale ? "chart stale" : "chart"}>
+        <div className={stale ? "chart-wrap stale" : "chart-wrap"}>
           <svg
             viewBox="0 0 755 226"
             role="img"
@@ -270,9 +249,25 @@ export function Chart({
         <span>
           <Clock3 size={12} /> Receive time · local
         </span>
+        <div className="chart-controls" aria-label="Chart range">
+          {[
+            [30, "30s"],
+            [120, "2m"],
+            [300, "5m"],
+          ].map(([v, n]) => (
+            <button
+              key={v}
+              aria-pressed={range === v}
+              className={range === v ? "active" : ""}
+              onClick={() => setRange(Number(v))}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
         <span>Uncalibrated signal</span>
       </div>
-    </Section>
+    </div>
   );
 }
 export function EventTable({
@@ -363,19 +358,16 @@ export function EventDetail({
   record: Record;
   close: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    ref.current?.showModal();
-  }, []);
+    ref.current?.focus();
+    const escape = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [close]);
   return (
-    <dialog
-      ref={ref}
-      onCancel={close}
-      onClick={(e) => {
-        if (e.target === ref.current) close();
-      }}
-    >
-      <div className="drawer">
+    <div className="drawer-record" onClick={close} role="presentation">
+      <div className="record-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Event details">
         <div className="panel-head">
           <div>
             <div className="eyebrow">EVENT DETAILS</div>
@@ -404,6 +396,6 @@ export function EventDetail({
           )}
         </div>
       </div>
-    </dialog>
+    </div>
   );
 }

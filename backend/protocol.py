@@ -12,6 +12,20 @@ ENUMS = {
     'severity': 'INFO NOTICE WARNING ERROR',
 }
 
+# Only these two commands may leave the dashboard. Everything else is refused
+# before a byte is written to the port.
+ACTIONS = ('MOTOR_ON', 'MOTOR_OFF')
+
+
+def command_line(action, seq):
+    """Build one outbound command frame. Returns bytes ending in a newline."""
+    if action not in ACTIONS:
+        raise ValueError('Unsupported command')
+    if type(seq) is not int or not 0 <= seq <= 4294967295:
+        raise ValueError('Expected uint32 sequence')
+    return (json.dumps({'v': 1, 'type': 'command', 'seq': seq, 'action': action},
+                       separators=(',', ':')) + '\n').encode('utf-8')
+
 
 def unique_object(pairs):
     obj = dict(pairs)
@@ -52,6 +66,15 @@ def parse(line):
             value = 'WARNING' if key == 'severity' else 'UNKNOWN'
         packet[key] = value
     if kind == 'telemetry':
+        # Optional and explicit: does this build actually have guard switches?
+        fitted = obj.get('guard_fitted')
+        if fitted is not None and type(fitted) is not bool:
+            raise ValueError('Invalid guard_fitted flag')
+        packet['guard_fitted'] = fitted
+        lock_fitted = obj.get('lock_fitted')
+        if lock_fitted is not None and type(lock_fitted) is not bool:
+            raise ValueError('Invalid lock_fitted flag')
+        packet['lock_fitted'] = lock_fitted
         adc = obj.get('back_emf_adc')
         if adc is not None and (type(adc) is not int or not 0 <= adc <= 1023):
             raise ValueError('Invalid ADC count')
