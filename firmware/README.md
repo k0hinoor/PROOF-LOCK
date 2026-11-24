@@ -102,14 +102,14 @@ Card UIDs never leave the board, so authorised cards are stored in the sketch.
 
    ```cpp
    const LocalTag AUTHORIZED_TAGS[] = {
-     {4, {0x87, 0x1E, 0x33, 0x06}, "OP-01"},
-     {4, {0xF1, 0xB0, 0xAF, 0x53}, "OP-02"},
+     {4, {0xF1, 0xB0, 0xAF, 0x53}, "OP-01"},
+     {4, {0x87, 0x1E, 0x33, 0x06}, "OP-02"},
      {0, {0}, nullptr},   // keep this terminator row last
    };
    ```
 
    Remember to add the same references to `config/operators.json`; a reference
-   the dashboard does not know is refused as *card not registered*.
+   the dashboard does not know is refused even if the Arduino accepted the card.
 
 4. Set `ENROLL_MODE` back to `false`, upload, and test again. Leave it `false`
    during normal use: the enrolment lines are plain text, not JSON, so the

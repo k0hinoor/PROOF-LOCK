@@ -58,4 +58,4 @@ Rules:
 
 ## Operator references
 
-`operator_ref` values are short local identifiers (`OP-01` … `OP-999999`). The dashboard compares them against `config/operators.json` (or `PROOFLOCK_OPERATORS`). An `ACCEPTED` result for a reference that is not registered is logged as **ACCESS DENIED · card not registered**, so a stale firmware table cannot open a session by itself. Successful authentications are written to the attendance table with the operator name, reference and a real timestamp.
+`operator_ref` values are short local identifiers (`OP-01` … `OP-999999`). The dashboard compares them against `config/operators.json` (or `PROOFLOCK_OPERATORS`). An `ACCEPTED` result for a reference that is not registered is logged as **ACCESS DENIED**, so a stale firmware table cannot open a session by itself. Successful authentications are written to the attendance table with the operator name, reference and a real timestamp.

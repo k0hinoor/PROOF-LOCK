@@ -54,7 +54,17 @@ class AccessTests(unittest.TestCase):
         m.connected = True
         m.ingest(rfid())
         self.assertIsNone(m.access)
-        self.assertIn('card not registered', m.last_unauthorised)
+        self.assertIn('operator list missing', m.last_unauthorised)
+
+    def test_ensure_creates_missing_registry_without_overwrite(self):
+        path = Path(self.temp.name)/'seeded.json'
+        registry = OperatorRegistry(path)
+        self.assertTrue(registry.ensure())
+        self.assertTrue(path.exists())
+        self.assertIn('OP-01', registry.operators)
+        path.write_text('{"operators":[{"ref":"OP-01","name":"Keep Me"}]}', encoding='utf-8')
+        self.assertFalse(registry.ensure())
+        self.assertEqual(registry.operators['OP-01'], 'Keep Me')
 
     def test_command_requires_session(self):
         self.m.ingest(telemetry())

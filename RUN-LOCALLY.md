@@ -153,7 +153,7 @@ Simulator ka data hamesha **SIMULATED DATA** label ke saath aata hai aur asli re
 1. `firmware\prooflock_uno\prooflock_uno.ino` Arduino IDE me kholo aur Uno par upload karo (steps: `firmware/README.md`).
 2. Arduino Serial Monitor **band** karo — warna port busy rahega.
 3. Dashboard me **Machine link** → port refresh → apna COM port chuno (jaise `COM3`) → **Connect**.
-4. Card scan karo. Agar `ACCESS DENIED · card not registered` aaye, to us `OP-nn` ko `config/operators.json` me add karo:
+4. Card scan karo. Agar `ACCESS DENIED` aaye, pehle `config/operators.json` banao (gate par **Create from example**), phir us `OP-nn` ko file me add karo:
 
 ```json
 {

@@ -89,7 +89,9 @@ class Monitor:
             self.last_unauthorised = ''
         else:
             self.sign_out('card denied at the reader')
-            why = ('card not registered' if result == 'ACCEPTED'
+            why = ('operator list missing — Arduino accepted the card'
+                   if result == 'ACCEPTED' and self.registry and self.registry.error
+                   else 'card not in the operator list' if result == 'ACCEPTED'
                    else 'reader not configured' if result == 'NOT_CONFIGURED'
                    else 'denied by reader')
             self.event('access', 'ACCESS_DENIED', 'WARNING',

@@ -25,7 +25,7 @@ Runs on the connected laptop without an account, internet connection, or cloud s
 
 1. The MFRC522 reader compares a card UID with the table stored **in the sketch**. The UID never leaves the board.
 2. The board sends `ACCEPTED`/`DENIED` plus a short reference such as `OP-01`.
-3. The service matches that reference against `config/operators.json`. A reference that is not registered is reported as **card not registered** and no session opens — a stale firmware table cannot unlock the console by itself.
+3. The service matches that reference against `config/operators.json`. A reference that is not registered is reported as **card not in the operator list** and no session opens — a stale firmware table cannot unlock the console by itself. If that file is missing, the Arduino can accept the card and the dashboard still refuses it.
 4. A session lasts 15 minutes, ends on **Lock**, and is required for every command.
 
 Without `config/operators.json` the console says so plainly, and every card is refused. Copy `config/operators.example.json` to `config/operators.json` and edit it; scan the cards to learn their references.
@@ -85,7 +85,7 @@ The bench firmware, pin table, card enrolment steps, standstill calibration and 
 1. Upload the bench firmware in [`firmware/prooflock_uno`](firmware/README.md), or confirm your own sketch speaks the [documented v1 protocol](docs/protocol.md) **and** accepts the two command frames. `115200` is the default baud in both places.
 2. Close Arduino Serial Monitor or any other app using the port.
 3. Click **Machine link**, refresh ports, select the Uno's port, and click **Connect**.
-4. Scan a registered card. If the gate answers `ACCESS DENIED · card not registered`, add that reference to `config/operators.json`.
+4. Scan a registered card. If the gate answers `ACCESS DENIED`, create `config/operators.json` (the gate has a **Create from example** button) and add that `OP-nn` reference.
 5. Check **Diagnostics** for valid packets, then start the motor from the console.
 
 | Symptom | What to check |

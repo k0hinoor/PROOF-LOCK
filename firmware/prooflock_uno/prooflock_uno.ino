@@ -107,8 +107,8 @@ struct LocalTag {
 const LocalTag AUTHORIZED_TAGS[] = {
   // Enrolled on the bench. The reference must also exist in
   // config/operators.json, or the dashboard refuses the scan.
-  {4, {0x87, 0x1E, 0x33, 0x06}, "OP-01"},
-  {4, {0xF1, 0xB0, 0xAF, 0x53}, "OP-02"},
+  {4, {0xF1, 0xB0, 0xAF, 0x53}, "OP-01"},
+  {4, {0x87, 0x1E, 0x33, 0x06}, "OP-02"},
   {0, {0}, nullptr},   // terminator: keep this last
 };
 

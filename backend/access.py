@@ -43,6 +43,26 @@ class OperatorRegistry:
         self.loaded_at = 0
         self.reload()
 
+    def ensure(self):
+        """Create operators.json from the example if it is missing. Never overwrite."""
+        if self.path.exists():
+            self.reload()
+            return False
+        example = self.path.with_name('operators.example.json')
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            content = example.read_text(encoding='utf-8') if example.exists() else (
+                '{\n  "operators": [\n'
+                '    { "ref": "OP-01", "name": "Engineer A" },\n'
+                '    { "ref": "OP-02", "name": "Engineer B" }\n'
+                '  ]\n}\n')
+            self.path.write_text(content, encoding='utf-8')
+        except OSError as exc:
+            self.error = f'Could not write {self.path} ({type(exc).__name__})'
+            return False
+        self.reload()
+        return True
+
     def reload(self):
         self.loaded_at = time.time()
         self.error = ''
