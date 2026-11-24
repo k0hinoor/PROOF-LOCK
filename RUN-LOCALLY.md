@@ -39,6 +39,13 @@ Yeh script khud hi:
 
 **Us window ko band mat karo** — server usi me chalta hai. Band karte hi dashboard ruk jayega.
 
+PowerShell se chalana ho to:
+
+```powershell
+cd "D:\proof lock"
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
 macOS / Linux par:
 
 ```bash
