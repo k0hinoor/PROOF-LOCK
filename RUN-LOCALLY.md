@@ -75,6 +75,17 @@ Yeh script:
 
 Agar aapke folder me `update.ps1` nahi hai (purana download), to ek baar yeh file [GitHub se](https://raw.githubusercontent.com/k0hinoor/PROOF-LOCK/main/update.ps1) download karke `D:\proof lock` me rakh do — uske baad yeh script khud ko bhi update kar leta hai.
 
+### Saari files seedha isi folder me (bina replace karne ke jhanjhat ke)
+
+Agar aap chahte ho ki download ki hui **har file** seedha usi folder me aa jaye jahan project hai:
+
+```powershell
+cd "D:\proof lock"
+powershell -ExecutionPolicy Bypass -File .\fetch.ps1
+```
+
+`fetch.ps1` GitHub se `PROOF-LOCK-main` folder nikal ke uska **content** seedha aapke folder me daal deta hai (hidden `.github`, `.gitignore` bhi), phir frontend build kar deta hai. Aapki `.venv`, `node_modules`, `data` aur `config\operators.json` waise hi rehti hain kyunki woh download me nahi hoti.
+
 ---
 
 ## 3. Manual commands (Windows PowerShell)
