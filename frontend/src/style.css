@@ -473,8 +473,29 @@ code {
   gap: 8px;
   padding: 12px;
   border-radius: 11px;
-  border: 1px dashed #23406b;
-  background: #0a1420;
+  border: 1px dashed var(--line-bright);
+  background: var(--panel-2);
+}
+.sim-page {
+  display: grid;
+  gap: 16px;
+}
+.sim-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-bright);
+  border-radius: 14px;
+  background: var(--panel-2);
+  color: var(--secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.sim-banner svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--blue);
 }
 .gate-sim-label {
   display: inline-flex;

@@ -18,6 +18,7 @@ import {
   Attendance,
   ConsoleHeader,
   LinkSettings,
+  SimulatorBench,
   machineView,
 } from "./console";
 import {
@@ -127,9 +128,9 @@ function Console() {
   const online = link === "online";
   const view = machineView(s, online);
   const [settings, setSettings] = useState(false);
-  const [page, setPage] = useState<"console" | "attendance" | "maintenance">(
-    "console",
-  );
+  const [page, setPage] = useState<
+    "console" | "attendance" | "maintenance" | "simulator"
+  >("console");
   const [menu, setMenu] = useState(false);
   const [banner, setBanner] = useState<{ text: string; tone: "ok" | "warn" }>();
   const [theme, setTheme] = usePreference<"light" | "dark">("theme", "dark");
@@ -234,18 +235,13 @@ function Console() {
             <button type="button" onClick={() => { setSettings(true); setMenu(false); }}>
               <Settings2 size={16} /> Machine link
             </button>
-            {!s?.preview && (
-              <button
-                disabled={!online}
-                onClick={async () => {
-                  await api("/api/simulator", { enabled: !sim });
-                  refresh();
-                  setMenu(false);
-                }}
-              >
-                <Radio size={16} /> {sim ? "Stop simulator" : "Simulator"}
-              </button>
-            )}
+            <button
+              type="button"
+              className={page === "simulator" ? "on" : ""}
+              onClick={() => go("simulator")}
+            >
+              <Radio size={16} /> Simulator
+            </button>
             <button className="side-lock" onClick={() => { void lock(); setMenu(false); }}>
               <Lock size={16} /> Lock
             </button>
@@ -276,6 +272,15 @@ function Console() {
             ) : page === "attendance" ? (
               <main className="fit-main">
                 <Attendance s={s} onChanged={refresh} />
+              </main>
+            ) : page === "simulator" ? (
+              <main className="fit-main">
+                <SimulatorBench
+                  s={s}
+                  online={online}
+                  view={view}
+                  onChanged={refresh}
+                />
               </main>
             ) : (
               <main className="console-maintenance">
