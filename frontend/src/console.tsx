@@ -24,6 +24,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { api, clock, dateTime } from "./lib";
+import { LiquidGlassThemeToggle } from "./theme-toggle";
 import type { AttendanceRow, Status } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -390,15 +391,14 @@ export function AccessGate({
           className={`scan ${denied ? "denied" : connected ? "" : "offline"}`}
         >
           <div className="scan-frame">
-            <Fingerprint size={46} strokeWidth={1.3} />
-            <span className="scan-line" />
+            <LockKeyhole size={22} strokeWidth={1.6} />
           </div>
           <strong>
             {denied
-              ? "ACCESS DENIED"
+              ? "Access denied"
               : connected
-                ? "Scan your ID card"
-                : "Machine controller offline"}
+                ? "Sign in"
+                : "Controller offline"}
           </strong>
           <span className="scan-help">
             {denied
@@ -417,7 +417,6 @@ export function AccessGate({
           <div>
             <dt>Reader</dt>
             <dd className={connected ? "ok" : "bad"}>
-              <i />
               {!online
                 ? "Service unavailable"
                 : sim && connected
@@ -430,7 +429,6 @@ export function AccessGate({
           <div>
             <dt>Registered operators</dt>
             <dd className={configured ? "ok" : "warn"}>
-              <i />
               {configured
                 ? `${s?.operator.count} registered`
                 : s?.operator.error
@@ -441,7 +439,6 @@ export function AccessGate({
           <div>
             <dt>Motor controls</dt>
             <dd className="warn">
-              <i />
               Locked until sign-in
             </dd>
           </div>
@@ -615,7 +612,6 @@ export function MotorPanel({
           <p>Commands are checked against live safety feedback.</p>
         </div>
         <span className={`state-pill ${view.motor.toLowerCase()}`}>
-          <i />
           {view.motor}
         </span>
       </div>
@@ -842,7 +838,6 @@ export function StatusPanel({
             <Fingerprint size={14} /> RFID reader
           </dt>
           <dd className={connected ? "ok" : "bad"}>
-            <i />
             {connected ? "Connected" : "Disconnected"}
           </dd>
         </div>
@@ -855,7 +850,6 @@ export function StatusPanel({
               interlockFault ? "bad" : s?.guard_fitted === false ? "warn" : "ok"
             }
           >
-            <i />
             {interlockFault
               ? "Fault"
               : s?.guard_fitted === false
@@ -868,7 +862,6 @@ export function StatusPanel({
             <Radio size={14} /> System status
           </dt>
           <dd className={system.tone}>
-            <i />
             {system.text}
           </dd>
         </div>
@@ -877,7 +870,6 @@ export function StatusPanel({
             <Fingerprint size={14} /> Session
           </dt>
           <dd className="idle">
-            <i />
             {s?.access
               ? `Expires in ${Math.max(1, Math.round(s.access.remaining / 60))} min`
               : "Locked"}
@@ -1070,11 +1062,15 @@ export function ConsoleHeader({
   online,
   now,
   onLock,
+  theme,
+  onThemeChange,
 }: {
   s?: Status;
   online: boolean;
   now: Date;
   onLock: () => void;
+  theme: "light" | "dark";
+  onThemeChange: (t: "light" | "dark") => void;
 }) {
   const name = s?.access?.operator.name;
   return (
@@ -1088,7 +1084,6 @@ export function ConsoleHeader({
       </a>
       <div className="console-status">
         <span className={`chip ${online ? "ok" : "bad"}`}>
-          <i />
           {online
             ? s?.source === "simulator"
               ? "SIMULATOR"
@@ -1115,6 +1110,7 @@ export function ConsoleHeader({
           <b>{name ?? "Operator"}</b>
           <small>{s?.access?.operator.ref ?? "Signed out"}</small>
         </span>
+        <LiquidGlassThemeToggle theme={theme} onThemeChange={onThemeChange} />
         <button className="button small" onClick={onLock} disabled={!s?.access}>
           <LogOut size={14} /> {s?.access ? "Lock" : "Locked"}
         </button>

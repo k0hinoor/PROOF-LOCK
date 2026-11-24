@@ -31,7 +31,6 @@ import {
 } from "./components";
 import { OverviewDash } from "./dashboard";
 import AsciiFluid from "./ascii-fluid";
-import { LiquidGlassThemeToggle } from "./theme-toggle";
 import { age, api, useClock, useEvents, useMonitor, usePreference } from "./lib";
 import type { Record, Status } from "./types";
 import "./style.css";
@@ -201,7 +200,14 @@ function Console() {
   return (
     <div className="console-shell">
       <AsciiFluid />
-      <ConsoleHeader s={s} online={online} now={now} onLock={lock} />
+      <ConsoleHeader
+        s={s}
+        online={online}
+        now={now}
+        onLock={lock}
+        theme={theme}
+        onThemeChange={setTheme}
+      />
       {signedIn && (
         <div className="fit-topbar">
           <button
@@ -226,9 +232,7 @@ function Console() {
               Attendance
             </button>
           </nav>
-          <div className="fit-top-right">
-            <LiquidGlassThemeToggle theme={theme} onThemeChange={setTheme} />
-          </div>
+          <div className="fit-top-right" />
         </div>
       )}
 
