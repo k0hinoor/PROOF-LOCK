@@ -86,6 +86,20 @@ powershell -ExecutionPolicy Bypass -File .\fetch.ps1
 
 `fetch.ps1` GitHub se `PROOF-LOCK-main` folder nikal ke uska **content** seedha aapke folder me daal deta hai (hidden `.github`, `.gitignore` bhi), phir frontend build kar deta hai. Aapki `.venv`, `node_modules`, `data` aur `config\operators.json` waise hi rehti hain kyunki woh download me nahi hoti.
 
+### Ek hi paste me saari files download
+
+Script save kiye bina, PowerShell me yeh paste karo (PowerShell folder me hi kholo):
+
+```powershell
+$tmp = Join-Path $env:TEMP ("pl-" + [guid]::NewGuid())
+Invoke-WebRequest https://codeload.github.com/k0hinoor/PROOF-LOCK/zip/refs/heads/main -OutFile "$tmp.zip" -UseBasicParsing
+Expand-Archive "$tmp.zip" -DestinationPath $tmp -Force
+Get-ChildItem "$tmp\PROOF-LOCK-main" -Force | Copy-Item -Destination . -Recurse -Force
+Remove-Item $tmp, "$tmp.zip" -Recurse -Force
+```
+
+43 files aa jayengi (hidden `.github`, `.gitignore` bhi). `data`, `.venv`, `node_modules` aur `config\operators.json` chhue nahi jate.
+
 ---
 
 ## 3. Manual commands (Windows PowerShell)
