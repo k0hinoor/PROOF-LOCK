@@ -12,7 +12,6 @@ import {
   Radio,
   Settings2,
   ShieldCheck,
-  X,
 } from "lucide-react";
 import {
   AccessGate,
@@ -208,48 +207,21 @@ function Console() {
         theme={theme}
         onThemeChange={setTheme}
       />
-      {signedIn && (
-        <div className="fit-topbar">
+      {!signedIn ? (
+        <AccessGate s={s} online={online} onChanged={refresh} />
+      ) : (
+        <div className={`app-body ${menu ? "nav-open" : ""}`}>
           <button
-            className="hamburger"
+            className="hamburger mobile-only"
             aria-label="Open menu"
-            aria-expanded={menu}
             onClick={() => setMenu(true)}
           >
             <Menu size={18} />
           </button>
-          <nav className="fit-pills" aria-label="Console sections">
-            <button
-              className={page === "console" ? "on" : ""}
-              onClick={() => go("console")}
-            >
-              Overview
-            </button>
-            <button
-              className={page === "attendance" ? "on" : ""}
-              onClick={() => go("attendance")}
-            >
-              Attendance
-            </button>
-          </nav>
-          <div className="fit-top-right" />
-        </div>
-      )}
-
-      {menu && (
-        <div className="burger-backdrop" onClick={() => setMenu(false)}>
-          <aside
-            className="burger-drawer"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-label="Menu"
-          >
-            <header>
-              <b>ProofLock</b>
-              <button className="icon-button" onClick={() => setMenu(false)} aria-label="Close">
-                <X size={16} />
-              </button>
-            </header>
+          {menu && (
+            <div className="burger-backdrop mobile-only" onClick={() => setMenu(false)} />
+          )}
+          <aside className="side-nav" aria-label="Console">
             <button className={page === "console" ? "on" : ""} onClick={() => go("console")}>
               <ShieldCheck size={16} /> Overview
             </button>
@@ -259,12 +231,7 @@ function Console() {
             <button className={page === "maintenance" ? "on" : ""} onClick={() => go("maintenance")}>
               <Activity size={16} /> Diagnostics
             </button>
-            <button
-              onClick={() => {
-                setSettings(true);
-                setMenu(false);
-              }}
-            >
+            <button onClick={() => { setSettings(true); setMenu(false); }}>
               <Settings2 size={16} /> Machine link
             </button>
             {!s?.preview && (
@@ -276,53 +243,47 @@ function Console() {
                   setMenu(false);
                 }}
               >
-                <Radio size={16} /> {sim ? "Stop simulator" : "Start simulator"}
+                <Radio size={16} /> {sim ? "Stop simulator" : "Simulator"}
               </button>
             )}
-            <button onClick={() => { void lock(); setMenu(false); }}>
-              <Lock size={16} /> Lock console
+            <button className="side-lock" onClick={() => { void lock(); setMenu(false); }}>
+              <Lock size={16} /> Lock
             </button>
           </aside>
+          <div className="app-stage">
+            {banner && (
+              <div className={`console-banner ${banner.tone}`} role="status">
+                {banner.tone === "ok" ? (
+                  <CheckCircle2 size={16} />
+                ) : (
+                  <CircleAlert size={16} />
+                )}
+                <span>{banner.text}</span>
+                <button onClick={() => setBanner(undefined)} aria-label="Dismiss">
+                  ✕
+                </button>
+              </div>
+            )}
+            {page === "console" ? (
+              <main className="fit-main">
+                <OverviewDash
+                  s={s}
+                  online={online}
+                  view={view}
+                  onCommand={command}
+                />
+              </main>
+            ) : page === "attendance" ? (
+              <main className="fit-main">
+                <Attendance s={s} onChanged={refresh} />
+              </main>
+            ) : (
+              <main className="console-maintenance">
+                <Maintenance s={s} online={online} />
+              </main>
+            )}
+          </div>
         </div>
-      )}
-
-      {!signedIn ? (
-        <AccessGate s={s} online={online} onChanged={refresh} />
-      ) : (
-        <>
-          {banner && (
-            <div className={`console-banner ${banner.tone}`} role="status">
-              {banner.tone === "ok" ? (
-                <CheckCircle2 size={16} />
-              ) : (
-                <CircleAlert size={16} />
-              )}
-              <span>{banner.text}</span>
-              <button onClick={() => setBanner(undefined)} aria-label="Dismiss">
-                ✕
-              </button>
-            </div>
-          )}
-
-          {page === "console" ? (
-            <main className="fit-main">
-              <OverviewDash
-                s={s}
-                online={online}
-                view={view}
-                onCommand={command}
-              />
-            </main>
-          ) : page === "attendance" ? (
-            <main className="fit-main">
-              <Attendance s={s} onChanged={refresh} />
-            </main>
-          ) : (
-            <main className="console-maintenance">
-              <Maintenance s={s} online={online} />
-            </main>
-          )}
-        </>
       )}
       <footer className="console-foot">
         <span>

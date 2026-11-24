@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight } from "lucide-react";
 import type { AttendanceRow, Status } from "./types";
 import type { MachineView } from "./console";
 import { MotorPanel, GuardPanel } from "./console";
@@ -33,23 +32,61 @@ function useAttendance(source: string, revision?: number) {
   return rows;
 }
 
-function LineChart({ values, accent }: { values: number[]; accent: string }) {
-  const w = 520;
-  const h = 150;
+function LineChart({
+  values,
+  labels,
+}: {
+  values: number[];
+  labels: string[];
+}) {
+  const w = 560;
+  const h = 180;
+  const pad = { l: 28, r: 8, t: 12, b: 24 };
   const max = Math.max(1, ...values);
-  const pts = values.map((v, i) => {
-    const x = values.length < 2 ? w / 2 : (i / (values.length - 1)) * (w - 16) + 8;
-    const y = h - 12 - (v / max) * (h - 28);
-    return `${x},${y}`;
-  });
-  const d = pts.length ? `M ${pts.join(" L ")}` : "";
-  const area = pts.length
-    ? `M 8,${h - 12} L ${pts.join(" L ")} L ${w - 8},${h - 12} Z`
-    : "";
+  const innerW = w - pad.l - pad.r;
+  const innerH = h - pad.t - pad.b;
+  const x = (i: number) =>
+    pad.l + (values.length < 2 ? innerW / 2 : (i / (values.length - 1)) * innerW);
+  const y = (v: number) => pad.t + innerH - (v / max) * innerH;
+  const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  const ticks = [0, Math.ceil(max / 2), max];
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="fit-line" aria-hidden>
-      <path d={area} fill={accent} opacity="0.12" />
-      <path d={d} fill="none" stroke={accent} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+    <svg viewBox={`0 0 ${w} ${h}`} className="fit-line" role="img" aria-label="Sign-ins over time">
+      {ticks.map((t) => (
+        <g key={t}>
+          <line
+            x1={pad.l}
+            x2={w - pad.r}
+            y1={y(t)}
+            y2={y(t)}
+            stroke="var(--line)"
+            strokeWidth="1"
+          />
+          <text x={pad.l - 6} y={y(t) + 3} textAnchor="end" className="fit-axis">
+            {t}
+          </text>
+        </g>
+      ))}
+      {pts.length > 1 && (
+        <polyline
+          points={pts.join(" ")}
+          fill="none"
+          stroke="var(--lilac)"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
+      {values.map((v, i) => (
+        <circle key={i} cx={x(i)} cy={y(v)} r="3" fill="var(--lilac)" />
+      ))}
+      {labels.map((label, i) =>
+        i % Math.ceil(labels.length / 7) === 0 ? (
+          <text key={i} x={x(i)} y={h - 6} textAnchor="middle" className="fit-axis">
+            {label}
+          </text>
+        ) : null,
+      )}
     </svg>
   );
 }
@@ -65,106 +102,31 @@ function BarChart({
 }) {
   const max = Math.max(1, ...granted.map((g, i) => g + denied[i]));
   return (
-    <div className="fit-bars" role="img" aria-label="Scans by day">
-      {labels.map((label, i) => {
-        const g = granted[i];
-        const d = denied[i];
-        const total = g + d;
-        const h = (total / max) * 100;
-        const gShare = total ? (g / total) * 100 : 0;
-        return (
-          <div key={label} className="fit-bar">
-            <div className="fit-bar-stack" style={{ height: `${Math.max(6, h)}%` }}>
-              <i style={{ flex: gShare || 0.01 }} className="g" />
-              <i style={{ flex: 100 - gShare || 0.01 }} className="d" />
-            </div>
-            <span>{label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function Donut({
-  slices,
-}: {
-  slices: { label: string; value: number; color: string }[];
-}) {
-  const total = slices.reduce((n, s) => n + s.value, 0) || 1;
-  let acc = 0;
-  const r = 42;
-  const c = 2 * Math.PI * r;
-  return (
-    <div className="fit-donut">
-      <svg viewBox="0 0 120 120" aria-hidden>
-        <circle cx="60" cy="60" r={r} fill="none" stroke="#1c1c20" strokeWidth="16" />
-        {slices.map((s) => {
-          const frac = s.value / total;
-          const dash = `${frac * c} ${c}`;
-          const rot = acc * 360 - 90;
-          acc += frac;
-          return (
-            <circle
-              key={s.label}
-              cx="60"
-              cy="60"
-              r={r}
-              fill="none"
-              stroke={s.color}
-              strokeWidth="16"
-              strokeDasharray={dash}
-              strokeLinecap="butt"
-              transform={`rotate(${rot} 60 60)`}
-            />
-          );
-        })}
-      </svg>
-      <ul>
-        {slices.map((s) => (
-          <li key={s.label}>
-            <i style={{ background: s.color }} />
-            <b>{total ? Math.round((s.value / total) * 100) : 0}%</b>
-            <span>{s.label}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function MonthCal({ marks }: { marks: Set<string> }) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const first = new Date(year, month, 1).getDay();
-  const days = new Date(year, month + 1, 0).getDate();
-  const cells: (number | null)[] = [
-    ...Array.from({ length: first }, () => null),
-    ...Array.from({ length: days }, (_, i) => i + 1),
-  ];
-  while (cells.length % 7) cells.push(null);
-  const title = now.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-  return (
-    <div className="fit-cal">
-      <header>
-        <strong>{title}</strong>
-      </header>
-      <div className="fit-cal-week">
-        {"SMTWTFS".split("").map((d, i) => (
-          <span key={i}>{d}</span>
-        ))}
+    <div>
+      <div className="fit-legend">
+        <span className="g">Granted</span>
+        <span className="d">Denied</span>
       </div>
-      <div className="fit-cal-grid">
-        {cells.map((day, i) => {
-          if (!day) return <span key={i} />;
-          const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const on = marks.has(key);
-          const today = day === now.getDate();
+      <div className="fit-bars" role="img" aria-label="Scans by day">
+        {labels.map((label, i) => {
+          const g = granted[i];
+          const d = denied[i];
+          const total = g + d;
           return (
-            <span key={i} className={`${on ? "on" : ""} ${today ? "today" : ""}`}>
-              {day}
-            </span>
+            <div key={label} className="fit-bar">
+              <div className="fit-bar-track">
+                {total > 0 && (
+                  <div
+                    className="fit-bar-stack"
+                    style={{ height: `${(total / max) * 100}%` }}
+                  >
+                    <i className="g" style={{ flex: g || 0.0001 }} />
+                    <i className="d" style={{ flex: d || 0.0001 }} />
+                  </div>
+                )}
+              </div>
+              <span>{label}</span>
+            </div>
           );
         })}
       </div>
@@ -186,24 +148,32 @@ export function OverviewDash({
   const [range, setRange] = useState<Range>("week");
   const rows = useAttendance(s?.source ?? "live", s?.revision);
   const since = startOf(range);
-
   const filtered = useMemo(
     () => rows.filter((r) => r.at >= since),
     [rows, since],
   );
-  const granted = filtered.filter((r) => r.result === "ACCEPTED");
-  const denied = filtered.filter((r) => r.result === "DENIED");
+  const granted = filtered.filter((r) => r.result === "ACCEPTED").length;
+  const denied = filtered.filter((r) => r.result === "DENIED").length;
 
   const spark = useMemo(() => {
-    const buckets = range === "today" ? 12 : range === "week" ? 7 : 30;
+    const buckets = range === "today" ? 12 : range === "week" ? 7 : 14;
     const out = Array(buckets).fill(0);
     const span = range === "today" ? 3600 * 2 : 86400;
     const origin = startOf(range);
+    const labels: string[] = [];
+    for (let i = 0; i < buckets; i++) {
+      const t = new Date((origin + i * span) * 1000);
+      labels.push(
+        range === "today"
+          ? `${t.getHours()}:00`
+          : t.toLocaleDateString("en-GB", { weekday: "short" }).slice(0, 2),
+      );
+    }
     for (const r of filtered) {
       const i = Math.min(buckets - 1, Math.floor((r.at - origin) / span));
       if (i >= 0) out[i] += 1;
     }
-    return out as number[];
+    return { values: out as number[], labels };
   }, [filtered, range]);
 
   const weekBars = useMemo(() => {
@@ -213,56 +183,33 @@ export function OverviewDash({
     const origin = Date.now() / 1000 - 6 * 86400;
     for (const r of rows) {
       if (r.at < origin) continue;
-      const day = new Date(r.at * 1000).getDay();
-      const i = (day + 6) % 7;
+      const i = (new Date(r.at * 1000).getDay() + 6) % 7;
       if (r.result === "ACCEPTED") g[i] += 1;
       else d[i] += 1;
     }
     return { labels, g, d };
   }, [rows]);
 
-  const marks = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of rows) {
-      if (r.result !== "ACCEPTED") continue;
-      const dt = new Date(r.at * 1000);
-      set.add(
-        `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`,
-      );
-    }
-    return set;
-  }, [rows]);
-
-  const operators = useMemo(() => {
-    const map = new Map<string, { name: string; n: number }>();
-    for (const r of granted) {
-      const cur = map.get(r.operator_ref) ?? { name: r.operator_name, n: 0 };
-      cur.n += 1;
-      map.set(r.operator_ref, cur);
-    }
-    return [...map.entries()]
-      .sort((a, b) => b[1].n - a[1].n)
-      .slice(0, 4);
-  }, [granted]);
-
-  const delta = granted.length;
-
   return (
     <div className="fit-grid">
-      <section className="fit-card span-hero">
+      <section className="fit-card motor-wrap">
+        <MotorPanel s={s} online={online} view={view} onCommand={onCommand} />
+      </section>
+
+      <section className="fit-card">
+        <GuardPanel s={s} online={online} view={view} />
+      </section>
+
+      <section className="fit-card">
         <div className="fit-card-head">
           <div>
-            <span className="fit-kicker">Sign-ins</span>
+            <span className="fit-kicker">RFID sign-ins</span>
             <h2>
-              {granted.length.toLocaleString()}
+              {granted}
               <small>
-                {delta > 0 ? (
-                  <span className="up">
-                    <ArrowUpRight size={14} /> {granted.length} this {range}
-                  </span>
-                ) : (
-                  <span className="flat">No scans in this window</span>
-                )}
+                {granted + denied
+                  ? `${denied} denied this ${range}`
+                  : `No scans this ${range}`}
               </small>
             </h2>
           </div>
@@ -278,73 +225,21 @@ export function OverviewDash({
             ))}
           </div>
         </div>
-        <LineChart values={spark} accent="var(--lilac)" />
-        <p className="fit-caption">
-          {denied.length} denied · {s?.access ? `Signed in as ${s.access.operator.name}` : "No live session"}
-        </p>
-      </section>
-
-      <section className="fit-card">
-        <MonthCal marks={marks} />
+        <LineChart values={spark.values} labels={spark.labels} />
       </section>
 
       <section className="fit-card">
         <div className="fit-card-head">
           <div>
-            <span className="fit-kicker">Scans</span>
+            <span className="fit-kicker">Reader traffic</span>
             <h2>
-              {(weekBars.g.reduce((a, b) => a + b, 0) +
-                weekBars.d.reduce((a, b) => a + b, 0)).toLocaleString()}
-              <small>This week</small>
+              {weekBars.g.reduce((a, b) => a + b, 0) +
+                weekBars.d.reduce((a, b) => a + b, 0)}
+              <small>Last 7 days</small>
             </h2>
           </div>
         </div>
         <BarChart labels={weekBars.labels} granted={weekBars.g} denied={weekBars.d} />
-      </section>
-
-      <section className="fit-card motor-wrap">
-        <MotorPanel s={s} online={online} view={view} onCommand={onCommand} />
-      </section>
-
-      <section className="fit-card">
-        <span className="fit-kicker">Operators</span>
-        <h3>On the reader</h3>
-        <ol className="fit-ops">
-          {operators.length ? (
-            operators.map(([ref, o], i) => (
-              <li key={ref}>
-                <em>{String(i + 1).padStart(2, "0")}</em>
-                <span>
-                  <b>{o.name || "Unregistered"}</b>
-                  <small>{ref}</small>
-                </span>
-                <strong>{o.n}</strong>
-              </li>
-            ))
-          ) : (
-            <li className="empty">No granted scans in this window.</li>
-          )}
-        </ol>
-      </section>
-
-      <section className="fit-card">
-        <span className="fit-kicker">Access mix</span>
-        <h3>Granted vs denied</h3>
-        <Donut
-          slices={[
-            { label: "Granted", value: granted.length, color: "#c4b5fd" },
-            { label: "Denied", value: denied.length, color: "#e8d36a" },
-            {
-              label: "Idle",
-              value: granted.length + denied.length ? 0 : 1,
-              color: "#3f3f46",
-            },
-          ].filter((s) => s.value > 0)}
-        />
-      </section>
-
-      <section className="fit-card">
-        <GuardPanel s={s} online={online} view={view} />
       </section>
     </div>
   );
