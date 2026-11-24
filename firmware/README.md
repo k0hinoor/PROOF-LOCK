@@ -97,15 +97,19 @@ Card UIDs never leave the board, so authorised cards are stored in the sketch.
    ```
 
 3. Copy the values into the table, one row per card, using a reference in the
-   form `OP-01`:
+   form `OP-01`. The two bench cards are already enrolled as `OP-01` and
+   `OP-02`; change or add rows for your own cards:
 
    ```cpp
    const LocalTag AUTHORIZED_TAGS[] = {
-     {4, {0xDE, 0xAD, 0xBE, 0xEF}, "OP-01"},
-     {7, {0x04, 0xA1, 0x22, 0x33, 0x44, 0x55, 0x66}, "OP-02"},
+     {4, {0x87, 0x1E, 0x33, 0x06}, "OP-01"},
+     {4, {0xF1, 0xB0, 0xAF, 0x53}, "OP-02"},
      {0, {0}, nullptr},   // keep this terminator row last
    };
    ```
+
+   Remember to add the same references to `config/operators.json`; a reference
+   the dashboard does not know is refused as *card not registered*.
 
 4. Set `ENROLL_MODE` back to `false`, upload, and test again. Leave it `false`
    during normal use: the enrolment lines are plain text, not JSON, so the
