@@ -55,6 +55,28 @@ chmod +x start-mac-linux.sh
 
 ---
 
+## 2b. Naya code update karna (purana folder refresh)
+
+Jab repo me naye changes aayen (jaise sketch me card enroll hua), poora folder dobara download karne ki zaroorat nahi:
+
+```powershell
+cd "D:\proof lock"
+powershell -ExecutionPolicy Bypass -File .\update.ps1 -Rebuild
+```
+
+Yeh script:
+
+- GitHub se latest `main` download karta hai,
+- source files overwrite karta hai,
+- par **`.venv`, `frontend\node_modules`, `frontend\dist`, `data\` aur `config\operators.json` ko chhod deta hai** (aapka login data aur naam safe rahenge),
+- `-Rebuild` ke saath frontend dobara build kar deta hai.
+
+**Server pehle band karo** (us window me Ctrl+C), phir update chalao, phir `start.ps1`.
+
+Agar aapke folder me `update.ps1` nahi hai (purana download), to ek baar yeh file [GitHub se](https://raw.githubusercontent.com/k0hinoor/PROOF-LOCK/main/update.ps1) download karke `D:\proof lock` me rakh do — uske baad yeh script khud ko bhi update kar leta hai.
+
+---
+
 ## 3. Manual commands (Windows PowerShell)
 
 ```powershell

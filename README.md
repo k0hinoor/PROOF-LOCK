@@ -54,7 +54,7 @@ npm --prefix frontend ci
 npm --prefix frontend run build
 ```
 
-Or run **`start.ps1`** from PowerShell (`powershell -ExecutionPolicy Bypass -File .\start.ps1`), double-click **`start-windows.bat`**, or use `./start-mac-linux.sh` on macOS/Linux: it creates the environment, installs packages, builds the console, creates `config/operators.json` from the example and opens the browser. A step-by-step Hindi/English walkthrough, including the Arduino link and troubleshooting, is in [`RUN-LOCALLY.md`](RUN-LOCALLY.md).
+Or run **`start.ps1`** from PowerShell (`powershell -ExecutionPolicy Bypass -File .\start.ps1`), double-click **`start-windows.bat`**, or use `./start-mac-linux.sh` on macOS/Linux: it creates the environment, installs packages, builds the console, creates `config/operators.json` from the example and opens the browser. A step-by-step Hindi/English walkthrough, including the Arduino link and troubleshooting, is in [`RUN-LOCALLY.md`](RUN-LOCALLY.md). To refresh an existing download without losing your database, operator names or installed packages, run `powershell -ExecutionPolicy Bypass -File .\update.ps1 -Rebuild`.
 
 Otherwise choose the commands for your OS. Activation is not required.
 
