@@ -185,6 +185,8 @@ class Runtime:
 @asynccontextmanager
 async def lifespan(app):
     runtime = app.state.runtime = Runtime()
+    if not PREVIEW:
+        runtime.registry.ensure()
     if PREVIEW:
         runtime.start_demo()
     async def tick():
@@ -289,9 +291,13 @@ async def operators():
 
 @app.post('/api/operators/reload')
 async def reload_operators():
-    monitor().registry.reload()
+    registry = monitor().registry
+    if not registry.path.exists():
+        registry.ensure()
+    else:
+        registry.reload()
     monitor().revision += 1
-    return monitor().registry.public()
+    return registry.public()
 
 
 @app.post('/api/operators/create')
@@ -300,18 +306,8 @@ async def create_operators():
     registry = monitor().registry
     if registry.path.exists():
         raise HTTPException(409, 'config/operators.json already exists')
-    example = registry.path.with_name('operators.example.json')
-    try:
-        registry.path.parent.mkdir(parents=True, exist_ok=True)
-        content = example.read_text(encoding='utf-8') if example.exists() else (
-            '{\n  "operators": [\n'
-            '    { "ref": "OP-01", "name": "Engineer A" },\n'
-            '    { "ref": "OP-02", "name": "Engineer B" }\n'
-            '  ]\n}\n')
-        registry.path.write_text(content, encoding='utf-8')
-    except OSError as exc:
-        raise HTTPException(503, 'Could not write config/operators.json') from exc
-    registry.reload()
+    if not registry.ensure():
+        raise HTTPException(503, registry.error or 'Could not write config/operators.json')
     monitor().revision += 1
     return registry.public()
 

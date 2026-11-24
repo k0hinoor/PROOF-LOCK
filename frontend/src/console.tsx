@@ -272,6 +272,14 @@ export function AccessGate({
     void loadPorts();
   }, [connected, s?.preview]);
 
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current || !online || s?.preview) return;
+    if (!s?.operator.error?.includes("No operator registry")) return;
+    seeded.current = true;
+    void createRegistry();
+  }, [online, s?.preview, s?.operator.error]);
+
   async function loadPorts() {
     try {
       const list =
@@ -394,7 +402,7 @@ export function AccessGate({
           </strong>
           <span className="scan-help">
             {denied
-              ? `${s?.last_unauthorised}. Motor controls stay locked.`
+              ? `${s?.last_unauthorised}. ${s?.operator.error ? "Create the operator list below, then scan again." : "Motor controls stay locked."}`
               : sim
                 ? "Simulated reader. Present a card below to review the console."
                 : connected
@@ -451,8 +459,8 @@ export function AccessGate({
             </p>
             <div className="gate-fix-actions">
               <button
-                className="button small"
-                disabled={Boolean(busy) || !online || sim}
+                className="button primary"
+                disabled={Boolean(busy) || !online}
                 onClick={createRegistry}
               >
                 <FilePlus2 size={14} />
@@ -460,7 +468,7 @@ export function AccessGate({
               </button>
               <button
                 className="button small"
-                disabled={Boolean(busy) || !online || sim}
+                disabled={Boolean(busy) || !online}
                 onClick={reloadRegistry}
               >
                 <RefreshCw size={14} />
