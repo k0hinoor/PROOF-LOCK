@@ -243,7 +243,6 @@ export function AccessGate({
 }) {
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
-  const [ref, setRef] = useState("");
   const [port, setPort] = useState("");
   const [ports, setPorts] = useState<{ port: string; description: string }[]>(
     [],
@@ -252,7 +251,6 @@ export function AccessGate({
   const configured = Boolean(s?.operator.configured);
   const connected = Boolean(online && s?.connected);
   const sim = s?.source === "simulator";
-  const operators = s?.operator.operators ?? [];
 
   async function present(card: string) {
     setBusy(card);
@@ -501,6 +499,7 @@ export function AccessGate({
                 ))}
               </select>
               <button
+                type="button"
                 className="button primary"
                 disabled={!online || !port || Boolean(busy)}
                 onClick={connectLive}
@@ -511,58 +510,238 @@ export function AccessGate({
             </div>
             <div className="gate-connect-row">
               <button
+                type="button"
                 className="button small"
                 disabled={!online || Boolean(busy)}
                 onClick={loadPorts}
               >
                 <RefreshCw size={14} /> Refresh ports
               </button>
+              {!sim && (
+                <button
+                  type="button"
+                  className="button small"
+                  disabled={!online || Boolean(busy)}
+                  onClick={startSimulator}
+                >
+                  <Radio size={14} />
+                  {busy === "sim" ? "Starting…" : "Start simulator"}
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {sim && connected && (
-          <div className="gate-sim">
-            <span className="gate-sim-label">
-              <ScanLine size={13} /> Simulated reader
-            </span>
-            <div className="gate-sim-row">
-              <select value={ref} onChange={(e) => setRef(e.target.value)}>
-                <option value="">Select an operator</option>
-                {operators.map((o) => (
-                  <option key={o.ref} value={o.ref}>
-                    {o.name} · {o.ref}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="button"
-                disabled={!ref || Boolean(busy)}
-                onClick={() => present(ref)}
-              >
-                Present card
-              </button>
-            </div>
+        {!sim && s?.preview && (
+          <div className="gate-connect">
             <button
-              className="button small"
-              disabled={Boolean(busy)}
-              onClick={() => present("OP-99")}
+              type="button"
+              className="button primary"
+              disabled={!online || Boolean(busy)}
+              onClick={startSimulator}
             >
-              Present unregistered card
-            </button>
-            <button
-              className="button small"
-              disabled={Boolean(busy)}
-              onClick={stopSimulator}
-            >
-              <Cable size={14} />
-              {busy === "live" ? "Stopping…" : "Use the real Arduino"}
+              <Radio size={15} />
+              {busy === "sim" ? "Starting…" : "Start simulator"}
             </button>
           </div>
+        )}
+
+        {sim && connected && (
+          <SimulatedReader
+            s={s}
+            busy={busy}
+            onPresent={present}
+            onStop={s?.preview ? undefined : stopSimulator}
+          />
         )}
         <p className="gate-foot">
           <ShieldCheck size={13} /> Card identifiers never reach this browser.
         </p>
+      </div>
+    </div>
+  );
+}
+
+function SimulatedReader({
+  s,
+  busy,
+  onPresent,
+  onStop,
+}: {
+  s?: Status;
+  busy: string;
+  onPresent: (card: string) => void;
+  onStop?: () => void;
+}) {
+  const [ref, setRef] = useState("");
+  const operators = s?.operator.operators ?? [];
+  return (
+    <div className="gate-sim">
+      <span className="gate-sim-label">
+        <ScanLine size={13} /> Simulated reader
+      </span>
+      <div className="gate-sim-row">
+        <select
+          value={ref}
+          onChange={(e) => setRef(e.target.value)}
+          aria-label="Simulated operator"
+        >
+          <option value="">Select an operator</option>
+          {operators.map((o) => (
+            <option key={o.ref} value={o.ref}>
+              {o.name} · {o.ref}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="button"
+          disabled={!ref || Boolean(busy)}
+          onClick={() => onPresent(ref)}
+        >
+          Present card
+        </button>
+      </div>
+      <button
+        type="button"
+        className="button small"
+        disabled={Boolean(busy)}
+        onClick={() => onPresent("OP-99")}
+      >
+        Present unregistered card
+      </button>
+      {onStop && (
+        <button
+          type="button"
+          className="button small"
+          disabled={Boolean(busy)}
+          onClick={onStop}
+        >
+          <Cable size={14} />
+          {busy === "live" ? "Stopping…" : "Use the real Arduino"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function SimulatorBench({
+  s,
+  online,
+  view,
+  onChanged,
+}: {
+  s?: Status;
+  online: boolean;
+  view: MachineView;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState("");
+  const [note, setNote] = useState("");
+  const sim = s?.source === "simulator";
+  const preview = Boolean(s?.preview);
+
+  async function present(card: string) {
+    setBusy(card);
+    setNote("");
+    try {
+      await api("/api/access/simulate", { ref: card });
+      setNote(
+        card === "OP-99"
+          ? "Unregistered card presented — access should be denied."
+          : "Card presented at the simulated reader.",
+      );
+      window.setTimeout(onChanged, 400);
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function startSimulator() {
+    setBusy("sim");
+    setNote("");
+    try {
+      await api("/api/simulator", { enabled: true });
+      setNote("Simulator started. Present a card to sign in.");
+      onChanged();
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function stopSimulator() {
+    setBusy("live");
+    setNote("");
+    try {
+      await api("/api/simulator", { enabled: false });
+      setNote("Simulator stopped. Choose the Arduino port under Machine link.");
+      onChanged();
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <div className="sim-page">
+      <p className="sim-banner">
+        <Radio size={16} />
+        <span>
+          Hardware simulator — demo telemetry only. It never opens a serial
+          port, and its attendance never mixes with live history.
+        </span>
+      </p>
+      <div className="fit-grid">
+        <section className="fit-card">
+          <span className="fit-kicker">Reader</span>
+          <h3>{sim ? "Simulated RFID" : "Simulator idle"}</h3>
+          {sim ? (
+            <SimulatedReader
+              s={s}
+              busy={busy}
+              onPresent={present}
+              onStop={preview ? undefined : stopSimulator}
+            />
+          ) : (
+            <button
+              type="button"
+              className="button primary"
+              disabled={!online || Boolean(busy)}
+              onClick={startSimulator}
+            >
+              <Radio size={15} />
+              {busy === "sim" ? "Starting…" : "Start simulator"}
+            </button>
+          )}
+          {note && <p className="gate-note">{note}</p>}
+        </section>
+        <section className="fit-card">
+          <span className="fit-kicker">Bench state</span>
+          <h3>{sim ? "Live from the simulator" : "Not running"}</h3>
+          <dl className="gate-state">
+            <div>
+              <dt>Source</dt>
+              <dd className={sim ? "ok" : "warn"}>{sim ? "SIMULATOR" : "Live / idle"}</dd>
+            </div>
+            <div>
+              <dt>Motor</dt>
+              <dd>{view.motor}</dd>
+            </div>
+            <div>
+              <dt>Guard</dt>
+              <dd>{view.guard}</dd>
+            </div>
+            <div>
+              <dt>Safety</dt>
+              <dd className={view.safetyTone}>{view.safety}</dd>
+            </div>
+          </dl>
+        </section>
       </div>
     </div>
   );
@@ -1297,17 +1476,20 @@ export function LinkSettings({
           </button>
         </div>
         <div className="drawer-actions">
-          <button
-            className="button"
-            onClick={async () => {
-              await api("/api/simulator", {
-                enabled: s?.source !== "simulator",
-              });
-            }}
-          >
-            <ScanLine size={14} />{" "}
-            {s?.source === "simulator" ? "Stop simulator" : "Start simulator"}
-          </button>
+          {!s?.preview && (
+            <button
+              type="button"
+              className="button"
+              onClick={async () => {
+                await api("/api/simulator", {
+                  enabled: s?.source !== "simulator",
+                });
+              }}
+            >
+              <ScanLine size={14} />{" "}
+              {s?.source === "simulator" ? "Stop simulator" : "Start simulator"}
+            </button>
+          )}
           <button
             className="button"
             onClick={async () => {

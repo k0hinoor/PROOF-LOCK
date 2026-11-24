@@ -29,7 +29,8 @@ PREVIEW = os.getenv('PROOFLOCK_PREVIEW') == '1'
 # In preview the runtime always drives the simulator and no serial port can be
 # opened, so these calls cannot reach hardware. Everything else stays blocked.
 PREVIEW_WRITES = ('/api/access/simulate', '/api/access/logout', '/api/access/expire',
-                  '/api/control', '/api/operators/create', '/api/operators/reload')
+                  '/api/control', '/api/operators/create', '/api/operators/reload',
+                  '/api/simulator')
 
 
 def read_available(device):
@@ -402,6 +403,8 @@ async def disconnect():
 
 @app.post('/api/simulator')
 async def simulator(mode: Mode):
+    if PREVIEW and not mode.enabled:
+        raise HTTPException(403, 'Preview is simulator-only')
     runtime = app.state.runtime
     async with runtime.lock:
         await runtime.halt()
