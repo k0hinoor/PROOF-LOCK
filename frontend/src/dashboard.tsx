@@ -13,7 +13,41 @@ function startOf(range: Range) {
   return d.getTime() / 1000;
 }
 
-function useAttendance(source: string, revision?: number) {
+function mockRows(): AttendanceRow[] {
+  const now = Date.now() / 1000;
+  const crew = [
+    ["OP-01", "Engineer A"],
+    ["OP-02", "Engineer B"],
+    ["OP-03", "Engineer C"],
+  ] as const;
+  const rows: AttendanceRow[] = [];
+  let id = 1;
+  for (let day = 6; day >= 0; day--) {
+    crew.forEach(([ref, name], i) => {
+      rows.push({
+        id: id++,
+        at: now - day * 86400 + 7 * 3600 + i * 3600,
+        source: "simulator",
+        operator_ref: ref,
+        operator_name: name,
+        result: "ACCEPTED",
+      });
+      if (day % 2 === 0 && i === 0) {
+        rows.push({
+          id: id++,
+          at: now - day * 86400 + 7 * 3600 + 45,
+          source: "simulator",
+          operator_ref: "OP-99",
+          operator_name: "Unknown",
+          result: "DENIED",
+        });
+      }
+    });
+  }
+  return rows;
+}
+
+function useAttendance(source: string, revision?: number, allowMock = false) {
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   useEffect(() => {
     const ctl = new AbortController();
@@ -22,13 +56,15 @@ function useAttendance(source: string, revision?: number) {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => {
-        if (!ctl.signal.aborted) setRows(d.rows ?? []);
+        if (ctl.signal.aborted) return;
+        const got = d.rows ?? [];
+        setRows(got.length ? got : allowMock ? mockRows() : []);
       })
       .catch(() => {
-        if (!ctl.signal.aborted) setRows([]);
+        if (!ctl.signal.aborted) setRows(allowMock ? mockRows() : []);
       });
     return () => ctl.abort();
-  }, [source, revision]);
+  }, [source, revision, allowMock]);
   return rows;
 }
 
@@ -91,6 +127,54 @@ function LineChart({
   );
 }
 
+function Donut({
+  slices,
+}: {
+  slices: { label: string; value: number; color: string }[];
+}) {
+  const total = slices.reduce((n, s) => n + s.value, 0) || 1;
+  let acc = 0;
+  const r = 42;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="fit-donut">
+      <svg viewBox="0 0 120 120" aria-hidden>
+        <circle cx="60" cy="60" r={r} fill="none" stroke="var(--line)" strokeWidth="16" />
+        {slices.map((s) => {
+          const frac = s.value / total;
+          const dash = `${frac * c} ${c}`;
+          const rot = acc * 360 - 90;
+          acc += frac;
+          return (
+            <circle
+              key={s.label}
+              cx="60"
+              cy="60"
+              r={r}
+              fill="none"
+              stroke={s.color}
+              strokeWidth="16"
+              strokeDasharray={dash}
+              transform={`rotate(${rot} 60 60)`}
+            />
+          );
+        })}
+      </svg>
+      <ul>
+        {slices.map((s) => (
+          <li key={s.label}>
+            <i style={{ background: s.color }} />
+            <b>{Math.round((s.value / total) * 100)}%</b>
+            <span>
+              {s.label} · {s.value}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function BarChart({
   labels,
   granted,
@@ -146,7 +230,11 @@ export function OverviewDash({
   onCommand: (action: "MOTOR_ON" | "MOTOR_OFF") => Promise<void>;
 }) {
   const [range, setRange] = useState<Range>("week");
-  const rows = useAttendance(s?.source ?? "live", s?.revision);
+  const rows = useAttendance(
+    s?.source ?? "live",
+    s?.revision,
+    Boolean(s?.preview || s?.source === "simulator"),
+  );
   const since = startOf(range);
   const filtered = useMemo(
     () => rows.filter((r) => r.at >= since),
@@ -240,6 +328,17 @@ export function OverviewDash({
           </div>
         </div>
         <BarChart labels={weekBars.labels} granted={weekBars.g} denied={weekBars.d} />
+      </section>
+
+      <section className="fit-card">
+        <span className="fit-kicker">Access mix</span>
+        <h3>Granted vs denied</h3>
+        <Donut
+          slices={[
+            { label: "Granted", value: granted || 0, color: "#c4b5fd" },
+            { label: "Denied", value: denied || 0, color: "#e8d36a" },
+          ].filter((s) => s.value > 0)}
+        />
       </section>
     </div>
   );

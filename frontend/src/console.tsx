@@ -380,7 +380,7 @@ export function AccessGate({
     <div className="gate">
       <div className="gate-card">
         <div className="gate-brand">
-          <img src="/prooflock.svg" alt="" width={44} height={44} />
+          <img src="/prooflock.png" alt="" width={44} height={44} />
           <div>
             <h1>ProofLock</h1>
             <p>Machine guard control</p>
@@ -1076,7 +1076,7 @@ export function ConsoleHeader({
   return (
     <header className="console-header">
       <a className="console-brand" href="#console">
-        <img src="/prooflock.svg" alt="" width={34} height={34} />
+        <img src="/prooflock.png" alt="" width={34} height={34} />
         <span>
           <b>ProofLock</b>
           <small>MACHINE GUARD CONTROL</small>
@@ -1170,7 +1170,7 @@ export function LinkSettings({
   };
 
   useEffect(() => {
-    if (open && !s?.preview) void load();
+    if (open) void load();
   }, [open]);
 
   if (!open) return null;

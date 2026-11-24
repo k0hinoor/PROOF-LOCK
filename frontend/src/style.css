@@ -264,6 +264,12 @@ code {
   gap: 11px;
   min-width: 0;
 }
+.console-brand img,
+.gate-brand img {
+  border-radius: 8px;
+  background: #050506;
+  object-fit: cover;
+}
 .console-brand b {
   display: block;
   font-size: 17px;
@@ -1612,7 +1618,8 @@ code {
   align-items: center;
   gap: 10px;
 }
-.fit-main {
+.fit-main,
+.console-maintenance {
   padding: 8px clamp(16px, 3vw, 34px) 24px;
 }
 
@@ -1732,7 +1739,7 @@ code {
   color: var(--text);
 }
 .side-nav .side-lock {
-  margin-top: auto;
+  margin-top: 8px;
 }
 .app-stage {
   min-width: 0;

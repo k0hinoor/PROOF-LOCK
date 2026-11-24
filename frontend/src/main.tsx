@@ -222,16 +222,16 @@ function Console() {
             <div className="burger-backdrop mobile-only" onClick={() => setMenu(false)} />
           )}
           <aside className="side-nav" aria-label="Console">
-            <button className={page === "console" ? "on" : ""} onClick={() => go("console")}>
+            <button type="button" className={page === "console" ? "on" : ""} onClick={() => go("console")}>
               <ShieldCheck size={16} /> Overview
             </button>
-            <button className={page === "attendance" ? "on" : ""} onClick={() => go("attendance")}>
+            <button type="button" className={page === "attendance" ? "on" : ""} onClick={() => go("attendance")}>
               <ClipboardList size={16} /> Attendance
             </button>
-            <button className={page === "maintenance" ? "on" : ""} onClick={() => go("maintenance")}>
+            <button type="button" className={page === "maintenance" ? "on" : ""} onClick={() => go("maintenance")}>
               <Activity size={16} /> Diagnostics
             </button>
-            <button onClick={() => { setSettings(true); setMenu(false); }}>
+            <button type="button" onClick={() => { setSettings(true); setMenu(false); }}>
               <Settings2 size={16} /> Machine link
             </button>
             {!s?.preview && (
