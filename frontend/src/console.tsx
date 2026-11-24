@@ -5,8 +5,10 @@ import {
   CalendarDays,
   CheckCircle2,
   CircleAlert,
+  Cable,
   CircleDot,
   Fan,
+  FilePlus2,
   Fingerprint,
   LockKeyhole,
   LogOut,
@@ -241,6 +243,10 @@ export function AccessGate({
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
   const [ref, setRef] = useState("");
+  const [port, setPort] = useState("");
+  const [ports, setPorts] = useState<{ port: string; description: string }[]>(
+    [],
+  );
   const denied = Boolean(s?.last_unauthorised) && !s?.access;
   const configured = Boolean(s?.operator.configured);
   const connected = Boolean(online && s?.connected);
@@ -254,6 +260,92 @@ export function AccessGate({
       await api("/api/access/simulate", { ref: card });
       setNote("Card presented at the simulated reader.");
       window.setTimeout(onChanged, 400);
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  useEffect(() => {
+    if (connected || s?.preview) return;
+    void loadPorts();
+  }, [connected, s?.preview]);
+
+  async function loadPorts() {
+    try {
+      const list =
+        await api<{ port: string; description: string }[]>("/api/ports");
+      setPorts(list);
+      setPort((current) =>
+        current && list.some((p) => p.port === current)
+          ? current
+          : (list[0]?.port ?? ""),
+      );
+      if (!list.length) setNote("No serial port found. Check the USB cable and driver.");
+    } catch (e) {
+      setNote((e as Error).message);
+    }
+  }
+
+  async function connectLive() {
+    setBusy("live");
+    setNote("");
+    try {
+      const st = await api<Status>("/api/device/connect", {
+        port,
+        baud: 115200,
+        timeout: 0.25,
+        reconnect: true,
+      });
+      setNote(
+        st.connected
+          ? `Connected to ${st.port}. Scan your card.`
+          : st.error || "The port did not open. Check the cable and the port name.",
+      );
+      onChanged();
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function createRegistry() {
+    setBusy("registry");
+    setNote("");
+    try {
+      await api("/api/operators/create", {});
+      setNote("config/operators.json created. Edit the names, then reload.");
+      window.setTimeout(onChanged, 300);
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function reloadRegistry() {
+    setBusy("reload");
+    setNote("");
+    try {
+      await api("/api/operators/reload", {});
+      setNote("Operator list reloaded.");
+      window.setTimeout(onChanged, 300);
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function stopSimulator() {
+    setBusy("live");
+    setNote("");
+    try {
+      await api("/api/simulator", { enabled: false });
+      setNote("Simulator stopped. Choose the Arduino port under Machine link.");
+      onChanged();
     } catch (e) {
       setNote((e as Error).message);
     } finally {
@@ -303,11 +395,13 @@ export function AccessGate({
           <span className="scan-help">
             {denied
               ? `${s?.last_unauthorised}. Motor controls stay locked.`
-              : connected
-                ? "Present your registered RFID card to unlock the machine controls."
-                : s?.preview
-                  ? "This preview is simulator-only. A USB controller is never available here."
-                  : "Connect the machine controller, or start the simulator to review the console."}
+              : sim
+                ? "Simulated reader. Present a card below to review the console."
+                : connected
+                  ? "Present your registered RFID card to unlock the machine controls."
+                  : s?.preview
+                    ? "This preview is simulator-only. A USB controller is never available here."
+                    : "Connect the machine controller, or start the simulator to review the console."}
           </span>
         </div>
 
@@ -318,9 +412,11 @@ export function AccessGate({
               <i />
               {!online
                 ? "Service unavailable"
-                : connected
-                  ? "Connected"
-                  : "Not connected"}
+                : sim && connected
+                  ? "Simulated reader"
+                  : connected
+                    ? `USB · ${s?.port ?? "connected"}`
+                    : "Not connected"}
             </dd>
           </div>
           <div>
@@ -329,7 +425,9 @@ export function AccessGate({
               <i />
               {configured
                 ? `${s?.operator.count} registered`
-                : "None registered"}
+                : s?.operator.error
+                  ? "Registry missing"
+                  : "None registered"}
             </dd>
           </div>
           <div>
@@ -342,22 +440,88 @@ export function AccessGate({
         </dl>
 
         {s?.operator.error && (
-          <p className="gate-note">
-            <CircleAlert size={14} /> {s.operator.error}. Add operators to{" "}
-            <code>config/operators.json</code> and reload.
-          </p>
+          <div className="gate-fix">
+            <p className="gate-note">
+              <CircleAlert size={14} /> {s.operator.error}.
+            </p>
+            <p className="gate-note-plain">
+              The service reads the operator list from that exact path. Copy{" "}
+              <code>config/operators.example.json</code> to{" "}
+              <code>config/operators.json</code>, edit the names, then reload.
+            </p>
+            <div className="gate-fix-actions">
+              <button
+                className="button small"
+                disabled={Boolean(busy) || !online || sim}
+                onClick={createRegistry}
+              >
+                <FilePlus2 size={14} />
+                {busy === "registry" ? "Creating…" : "Create from example"}
+              </button>
+              <button
+                className="button small"
+                disabled={Boolean(busy) || !online || sim}
+                onClick={reloadRegistry}
+              >
+                <RefreshCw size={14} />
+                {busy === "reload" ? "Reloading…" : "Reload list"}
+              </button>
+            </div>
+            {sim && (
+              <p className="gate-note-plain">
+                In simulator runs the file is <code>config/operators.json</code>{" "}
+                in the folder where the service was started.
+              </p>
+            )}
+          </div>
         )}
         {note && <p className="gate-note">{note}</p>}
 
         {!connected && !s?.preview && (
-          <button
-            className="button primary wide"
-            disabled={!online || Boolean(busy)}
-            onClick={startSimulator}
-          >
-            <Radio size={15} />
-            {busy === "sim" ? "Starting…" : "Start simulator"}
-          </button>
+          <div className="gate-connect">
+            <div className="gate-connect-row">
+              <select
+                value={sim ? "" : port}
+                onChange={(e) => setPort(e.target.value)}
+                disabled={Boolean(busy)}
+                aria-label="Serial port"
+              >
+                <option value="">
+                  {ports.length ? "Select the Arduino port" : "No serial port found"}
+                </option>
+                {ports.map((p) => (
+                  <option key={p.port} value={p.port}>
+                    {p.port} — {p.description}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="button primary"
+                disabled={!online || !port || Boolean(busy)}
+                onClick={connectLive}
+              >
+                <Cable size={15} />
+                {busy === "live" ? "Connecting…" : "Connect Arduino"}
+              </button>
+            </div>
+            <div className="gate-connect-row">
+              <button
+                className="button small"
+                disabled={!online || Boolean(busy)}
+                onClick={loadPorts}
+              >
+                <RefreshCw size={14} /> Refresh ports
+              </button>
+              <button
+                className="button small"
+                disabled={!online || Boolean(busy)}
+                onClick={startSimulator}
+              >
+                <Radio size={14} />
+                {busy === "sim" ? "Starting…" : "Use the simulator instead"}
+              </button>
+            </div>
+          </div>
         )}
 
         {sim && connected && (
@@ -388,6 +552,14 @@ export function AccessGate({
               onClick={() => present("OP-99")}
             >
               Present unregistered card
+            </button>
+            <button
+              className="button small"
+              disabled={Boolean(busy)}
+              onClick={stopSimulator}
+            >
+              <Cable size={14} />
+              {busy === "live" ? "Stopping…" : "Use the real Arduino"}
             </button>
           </div>
         )}
@@ -1079,6 +1251,11 @@ export function LinkSettings({
             ? `Connected to ${s.port} at ${s.baud} baud. Disconnect before changing settings.`
             : "Opening a port can reset some boards. Close other serial monitors first."}
         </p>
+        {!s?.connected && s?.error && (
+          <p className="drawer-note warn">
+            <CircleAlert size={14} /> {s.error}
+          </p>
+        )}
         {note && <p className="drawer-note">{note}</p>}
         <div className="drawer-actions">
           <button className="button small" onClick={load} disabled={busy}>
@@ -1090,8 +1267,12 @@ export function LinkSettings({
             onClick={async () => {
               setBusy(true);
               try {
-                await api("/api/device/connect", config);
-                setNote("Connecting…");
+                const st = await api<Status>("/api/device/connect", config);
+                setNote(
+                  st.connected
+                    ? `Connected to ${st.port} at ${st.baud} baud. Scan your card.`
+                    : (st.error || "The port did not open. Check the cable and the port name."),
+                );
               } catch (e) {
                 setNote((e as Error).message);
               } finally {

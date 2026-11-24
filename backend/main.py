@@ -161,7 +161,10 @@ class Runtime:
             except (serial.SerialException, OSError, ValueError) as exc:
                 m.connected = False
                 m.since = None
-                error = f'Serial link unavailable ({type(exc).__name__}). Check USB and close other serial monitors.'
+                error = ('Port is in use. Close the Arduino Serial Monitor (or any other app) '
+                         'and try again.' if 'Permission' in type(exc).__name__ or 'Access' in str(exc)
+                         else f'Could not open {config.port} ({type(exc).__name__}). '
+                              'Check the USB cable, the driver (CH340) and the selected port.')
                 if config.reconnect:
                     error += ' Retrying every 2 seconds.'
                 if m.error != error:
@@ -222,6 +225,8 @@ async def local_boundary(request, call_next):
     if request.method not in ('GET', 'HEAD') and not same_origin(
             request.headers.get('origin', ''), request.headers.get('host')):
         return JSONResponse({'detail': 'Same-origin request required'}, 403)
+    if PREVIEW and request.method not in ('GET', 'HEAD') and request.url.path.startswith('/api/operators'):
+        return JSONResponse({'detail': 'Preview keeps a fixed operator list'}, 403)
     if PREVIEW and request.method not in ('GET', 'HEAD') and request.url.path not in PREVIEW_WRITES:
         return JSONResponse({'detail': 'Preview only accepts simulator input'}, 403)
     # The browser is the only client this service has. Requiring the JSON
@@ -289,6 +294,28 @@ async def reload_operators():
     return monitor().registry.public()
 
 
+@app.post('/api/operators/create')
+async def create_operators():
+    """Seed config/operators.json from the example, never overwriting one."""
+    registry = monitor().registry
+    if registry.path.exists():
+        raise HTTPException(409, 'config/operators.json already exists')
+    example = registry.path.with_name('operators.example.json')
+    try:
+        registry.path.parent.mkdir(parents=True, exist_ok=True)
+        content = example.read_text(encoding='utf-8') if example.exists() else (
+            '{\n  "operators": [\n'
+            '    { "ref": "OP-01", "name": "Engineer A" },\n'
+            '    { "ref": "OP-02", "name": "Engineer B" }\n'
+            '  ]\n}\n')
+        registry.path.write_text(content, encoding='utf-8')
+    except OSError as exc:
+        raise HTTPException(503, 'Could not write config/operators.json') from exc
+    registry.reload()
+    monitor().revision += 1
+    return registry.public()
+
+
 @app.post('/api/access/logout')
 async def logout():
     monitor().sign_out('operator signed out')
@@ -332,6 +359,15 @@ async def connect(config: Connect):
         m.source, m.port, m.baud, m.error = 'live', config.port, config.baud, 'Opening serial port…'
         runtime.stop = asyncio.Event()
         runtime.task = asyncio.create_task(runtime.serial_reader(config))
+    # Try the port before answering, so the gate can say *why* it failed
+    # instead of silently staying disconnected.
+    await asyncio.sleep(0)
+    if m.connected:
+        return status()
+    for _ in range(40):
+        if m.connected or m.error != 'Opening serial port…':
+            break
+        await asyncio.sleep(.1)
     return status()
 
 

@@ -55,6 +55,53 @@ chmod +x start-mac-linux.sh
 
 ---
 
+## 2b. Naya code update karna (purana folder refresh)
+
+Jab repo me naye changes aayen (jaise sketch me card enroll hua), poora folder dobara download karne ki zaroorat nahi:
+
+```powershell
+cd "D:\proof lock"
+powershell -ExecutionPolicy Bypass -File .\update.ps1 -Rebuild
+```
+
+Yeh script:
+
+- GitHub se latest `main` download karta hai,
+- source files overwrite karta hai,
+- par **`.venv`, `frontend\node_modules`, `frontend\dist`, `data\` aur `config\operators.json` ko chhod deta hai** (aapka login data aur naam safe rahenge),
+- `-Rebuild` ke saath frontend dobara build kar deta hai.
+
+**Server pehle band karo** (us window me Ctrl+C), phir update chalao, phir `start.ps1`.
+
+Agar aapke folder me `update.ps1` nahi hai (purana download), to ek baar yeh file [GitHub se](https://raw.githubusercontent.com/k0hinoor/PROOF-LOCK/main/update.ps1) download karke `D:\proof lock` me rakh do — uske baad yeh script khud ko bhi update kar leta hai.
+
+### Saari files seedha isi folder me (bina replace karne ke jhanjhat ke)
+
+Agar aap chahte ho ki download ki hui **har file** seedha usi folder me aa jaye jahan project hai:
+
+```powershell
+cd "D:\proof lock"
+powershell -ExecutionPolicy Bypass -File .\fetch.ps1
+```
+
+`fetch.ps1` GitHub se `PROOF-LOCK-main` folder nikal ke uska **content** seedha aapke folder me daal deta hai (hidden `.github`, `.gitignore` bhi), phir frontend build kar deta hai. Aapki `.venv`, `node_modules`, `data` aur `config\operators.json` waise hi rehti hain kyunki woh download me nahi hoti.
+
+### Ek hi paste me saari files download
+
+Script save kiye bina, PowerShell me yeh paste karo (PowerShell folder me hi kholo):
+
+```powershell
+$tmp = Join-Path $env:TEMP ("pl-" + [guid]::NewGuid())
+Invoke-WebRequest https://codeload.github.com/k0hinoor/PROOF-LOCK/zip/refs/heads/main -OutFile "$tmp.zip" -UseBasicParsing
+Expand-Archive "$tmp.zip" -DestinationPath $tmp -Force
+Get-ChildItem "$tmp\PROOF-LOCK-main" -Force | Copy-Item -Destination . -Recurse -Force
+Remove-Item $tmp, "$tmp.zip" -Recurse -Force
+```
+
+43 files aa jayengi (hidden `.github`, `.gitignore` bhi). `data`, `.venv`, `node_modules` aur `config\operators.json` chhue nahi jate.
+
+---
+
 ## 3. Manual commands (Windows PowerShell)
 
 ```powershell
