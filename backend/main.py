@@ -29,7 +29,7 @@ PREVIEW = os.getenv('PROOFLOCK_PREVIEW') == '1'
 # In preview the runtime always drives the simulator and no serial port can be
 # opened, so these calls cannot reach hardware. Everything else stays blocked.
 PREVIEW_WRITES = ('/api/access/simulate', '/api/access/logout', '/api/access/expire',
-                  '/api/control')
+                  '/api/control', '/api/operators/create', '/api/operators/reload')
 
 
 def read_available(device):
@@ -181,14 +181,38 @@ class Runtime:
                 await asyncio.wait_for(self.stop.wait(), timeout=2)
 
 
+def seed_preview_history(monitor):
+    """Fill the preview database so every chart has something to draw."""
+    store = monitor.store
+    if not store:
+        return
+    if next(store.rows('attendance', 'simulator', limit=1), None):
+        return
+    now = time.time()
+    crew = (('OP-01', 'Engineer A'), ('OP-02', 'Engineer B'), ('OP-03', 'Engineer C'))
+    seq = 1
+    for day in range(6, -1, -1):
+        for i, (ref, name) in enumerate(crew):
+            at = now - day * 86400 + 7 * 3600 + i * 3600
+            store.attendance_event(at, 'simulator', ref, name, 'ACCEPTED')
+            if day % 2 == 0 and i == 0:
+                store.attendance_event(at + 45, 'simulator', 'OP-99', 'Unknown', 'DENIED')
+            store.command(at + 90, 'simulator', ref, name, 'MOTOR_ON', 1, 'accepted')
+            store.command(at + 400, 'simulator', ref, name, 'MOTOR_OFF', 1, 'accepted')
+            store.event(at + 90, 'simulator', 'console', 'control', 'MOTOR_ON',
+                        'INFO', f'{ref} start', seq, {})
+            seq += 1
+    for i in range(80):
+        store.sample(now - (80 - i) * 2, 'simulator', 5 + (i % 10) * 4, i)
+
 
 @asynccontextmanager
 async def lifespan(app):
     runtime = app.state.runtime = Runtime()
-    if not PREVIEW:
-        runtime.registry.ensure()
+    runtime.registry.ensure()
     if PREVIEW:
         runtime.start_demo()
+        seed_preview_history(runtime.monitor)
     async def tick():
         while True:
             runtime.monitor.tick()
@@ -227,8 +251,6 @@ async def local_boundary(request, call_next):
     if request.method not in ('GET', 'HEAD') and not same_origin(
             request.headers.get('origin', ''), request.headers.get('host')):
         return JSONResponse({'detail': 'Same-origin request required'}, 403)
-    if PREVIEW and request.method not in ('GET', 'HEAD') and request.url.path.startswith('/api/operators'):
-        return JSONResponse({'detail': 'Preview keeps a fixed operator list'}, 403)
     if PREVIEW and request.method not in ('GET', 'HEAD') and request.url.path not in PREVIEW_WRITES:
         return JSONResponse({'detail': 'Preview only accepts simulator input'}, 403)
     # The browser is the only client this service has. Requiring the JSON

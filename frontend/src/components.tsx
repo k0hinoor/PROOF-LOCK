@@ -40,7 +40,7 @@ export const display = (v: string) =>
     .toLowerCase()
     .replace(/(^|\s)\S/g, (s) => s.toUpperCase())
     .replace(/\bRfid\b/g, "RFID");
-export function Badge({ value, dot = true }: { value: string; dot?: boolean }) {
+export function Badge({ value, dot = false }: { value: string; dot?: boolean }) {
   return (
     <span className={`badge ${tone(value)}`}>
       {dot && <i />}

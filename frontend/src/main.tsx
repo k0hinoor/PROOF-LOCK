@@ -7,6 +7,9 @@ import {
   CircleAlert,
   ClipboardList,
   Gauge,
+  Lock,
+  Menu,
+  Radio,
   Settings2,
   ShieldCheck,
 } from "lucide-react";
@@ -14,10 +17,7 @@ import {
   AccessGate,
   Attendance,
   ConsoleHeader,
-  GuardPanel,
   LinkSettings,
-  MotorPanel,
-  StatusPanel,
   machineView,
 } from "./console";
 import {
@@ -28,7 +28,9 @@ import {
   Section,
   display,
 } from "./components";
-import { age, api, useClock, useEvents, useMonitor } from "./lib";
+import { OverviewDash } from "./dashboard";
+import AsciiFluid from "./ascii-fluid";
+import { age, api, useClock, useEvents, useMonitor, usePreference } from "./lib";
 import type { Record, Status } from "./types";
 import "./style.css";
 
@@ -125,10 +127,18 @@ function Console() {
   const online = link === "online";
   const view = machineView(s, online);
   const [settings, setSettings] = useState(false);
-  const [page, setPage] = useState<"console" | "maintenance">("console");
+  const [page, setPage] = useState<"console" | "attendance" | "maintenance">(
+    "console",
+  );
+  const [menu, setMenu] = useState(false);
   const [banner, setBanner] = useState<{ text: string; tone: "ok" | "warn" }>();
+  const [theme, setTheme] = usePreference<"light" | "dark">("theme", "dark");
   const signedIn = Boolean(s?.access);
   const sim = s?.source === "simulator";
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   useEffect(() => {
     if (!signedIn) setPage("console");
@@ -140,9 +150,6 @@ function Console() {
     return () => window.clearTimeout(id);
   }, [banner]);
 
-  // The board only keeps the motor energised while MOTOR_ON keeps arriving.
-  // This refreshes that permit about once a second; if this page closes, the
-  // laptop sleeps or the link drops, the machine stops itself.
   const running = s?.source !== "simulator" && s?.latest?.motor === "RUNNING";
   useEffect(() => {
     if (!running || !online || !signedIn) return;
@@ -184,78 +191,99 @@ function Console() {
     }
   }
 
+  function go(next: typeof page) {
+    setPage(next);
+    setMenu(false);
+  }
+
   return (
     <div className="console-shell">
-      <ConsoleHeader s={s} online={online} now={now} onLock={lock} />
+      <AsciiFluid />
+      <ConsoleHeader
+        s={s}
+        online={online}
+        now={now}
+        onLock={lock}
+        theme={theme}
+        onThemeChange={setTheme}
+      />
       {!signedIn ? (
         <AccessGate s={s} online={online} onChanged={refresh} />
       ) : (
-        <>
-          <div className="console-toolbar">
-            <nav className="console-tabs" aria-label="Console sections">
-              <button
-                className={page === "console" ? "active" : ""}
-                onClick={() => setPage("console")}
-              >
-                <ShieldCheck size={15} /> Machine
-              </button>
-              <button
-                className={page === "maintenance" ? "active" : ""}
-                onClick={() => setPage("maintenance")}
-              >
-                <Activity size={15} /> Diagnostics
-              </button>
-            </nav>
-            <div className="toolbar-right">
-              {sim && <span className="chip sim">SIMULATED DATA</span>}
-              {!s?.fresh && (
-                <span className="chip warn">
-                  <i /> No current feedback
-                </span>
-              )}
-              <button
-                className="button small"
-                onClick={() => setSettings(true)}
-              >
-                <Settings2 size={14} /> Machine link
-              </button>
-            </div>
-          </div>
-
-          {banner && (
-            <div className={`console-banner ${banner.tone}`} role="status">
-              {banner.tone === "ok" ? (
-                <CheckCircle2 size={16} />
-              ) : (
-                <CircleAlert size={16} />
-              )}
-              <span>{banner.text}</span>
-              <button onClick={() => setBanner(undefined)} aria-label="Dismiss">
-                ✕
-              </button>
-            </div>
+        <div className={`app-body ${menu ? "nav-open" : ""}`}>
+          <button
+            className="hamburger mobile-only"
+            aria-label="Open menu"
+            onClick={() => setMenu(true)}
+          >
+            <Menu size={18} />
+          </button>
+          {menu && (
+            <div className="burger-backdrop mobile-only" onClick={() => setMenu(false)} />
           )}
-
-          {page === "console" ? (
-            <>
-              <main className="console-grid">
-                <MotorPanel
+          <aside className="side-nav" aria-label="Console">
+            <button type="button" className={page === "console" ? "on" : ""} onClick={() => go("console")}>
+              <ShieldCheck size={16} /> Overview
+            </button>
+            <button type="button" className={page === "attendance" ? "on" : ""} onClick={() => go("attendance")}>
+              <ClipboardList size={16} /> Attendance
+            </button>
+            <button type="button" className={page === "maintenance" ? "on" : ""} onClick={() => go("maintenance")}>
+              <Activity size={16} /> Diagnostics
+            </button>
+            <button type="button" onClick={() => { setSettings(true); setMenu(false); }}>
+              <Settings2 size={16} /> Machine link
+            </button>
+            {!s?.preview && (
+              <button
+                disabled={!online}
+                onClick={async () => {
+                  await api("/api/simulator", { enabled: !sim });
+                  refresh();
+                  setMenu(false);
+                }}
+              >
+                <Radio size={16} /> {sim ? "Stop simulator" : "Simulator"}
+              </button>
+            )}
+            <button className="side-lock" onClick={() => { void lock(); setMenu(false); }}>
+              <Lock size={16} /> Lock
+            </button>
+          </aside>
+          <div className="app-stage">
+            {banner && (
+              <div className={`console-banner ${banner.tone}`} role="status">
+                {banner.tone === "ok" ? (
+                  <CheckCircle2 size={16} />
+                ) : (
+                  <CircleAlert size={16} />
+                )}
+                <span>{banner.text}</span>
+                <button onClick={() => setBanner(undefined)} aria-label="Dismiss">
+                  ✕
+                </button>
+              </div>
+            )}
+            {page === "console" ? (
+              <main className="fit-main">
+                <OverviewDash
                   s={s}
                   online={online}
                   view={view}
                   onCommand={command}
                 />
-                <GuardPanel s={s} online={online} view={view} />
-                <StatusPanel s={s} online={online} view={view} />
               </main>
-              <Attendance s={s} onChanged={refresh} />
-            </>
-          ) : (
-            <main className="console-maintenance">
-              <Maintenance s={s} online={online} />
-            </main>
-          )}
-        </>
+            ) : page === "attendance" ? (
+              <main className="fit-main">
+                <Attendance s={s} onChanged={refresh} />
+              </main>
+            ) : (
+              <main className="console-maintenance">
+                <Maintenance s={s} online={online} />
+              </main>
+            )}
+          </div>
+        </div>
       )}
       <footer className="console-foot">
         <span>
@@ -269,19 +297,6 @@ function Console() {
         <button className="link-button" onClick={() => setSettings(true)}>
           <ChevronDown size={13} /> Machine link
         </button>
-        {!s?.preview && (
-          <button
-            className="link-button"
-            style={{ marginLeft: "auto" }}
-            disabled={!online}
-            onClick={async () => {
-              await api("/api/simulator", { enabled: !sim });
-              refresh();
-            }}
-          >
-            {sim ? "Stop simulator" : "Simulator"}
-          </button>
-        )}
       </footer>
       <LinkSettings s={s} open={settings} close={() => setSettings(false)} />
     </div>
