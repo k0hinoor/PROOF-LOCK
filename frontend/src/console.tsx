@@ -274,7 +274,7 @@ export function AccessGate({
 
   const seeded = useRef(false);
   useEffect(() => {
-    if (seeded.current || !online || s?.preview) return;
+    if (seeded.current || !online) return;
     if (!s?.operator.error?.includes("No operator registry")) return;
     seeded.current = true;
     void createRegistry();

@@ -29,7 +29,7 @@ PREVIEW = os.getenv('PROOFLOCK_PREVIEW') == '1'
 # In preview the runtime always drives the simulator and no serial port can be
 # opened, so these calls cannot reach hardware. Everything else stays blocked.
 PREVIEW_WRITES = ('/api/access/simulate', '/api/access/logout', '/api/access/expire',
-                  '/api/control')
+                  '/api/control', '/api/operators/create', '/api/operators/reload')
 
 
 def read_available(device):
@@ -185,8 +185,7 @@ class Runtime:
 @asynccontextmanager
 async def lifespan(app):
     runtime = app.state.runtime = Runtime()
-    if not PREVIEW:
-        runtime.registry.ensure()
+    runtime.registry.ensure()
     if PREVIEW:
         runtime.start_demo()
     async def tick():
@@ -227,8 +226,6 @@ async def local_boundary(request, call_next):
     if request.method not in ('GET', 'HEAD') and not same_origin(
             request.headers.get('origin', ''), request.headers.get('host')):
         return JSONResponse({'detail': 'Same-origin request required'}, 403)
-    if PREVIEW and request.method not in ('GET', 'HEAD') and request.url.path.startswith('/api/operators'):
-        return JSONResponse({'detail': 'Preview keeps a fixed operator list'}, 403)
     if PREVIEW and request.method not in ('GET', 'HEAD') and request.url.path not in PREVIEW_WRITES:
         return JSONResponse({'detail': 'Preview only accepts simulator input'}, 403)
     # The browser is the only client this service has. Requiring the JSON
