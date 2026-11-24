@@ -269,6 +269,19 @@ function Console() {
         <button className="link-button" onClick={() => setSettings(true)}>
           <ChevronDown size={13} /> Machine link
         </button>
+        {!s?.preview && (
+          <button
+            className="link-button"
+            style={{ marginLeft: "auto" }}
+            disabled={!online}
+            onClick={async () => {
+              await api("/api/simulator", { enabled: !sim });
+              refresh();
+            }}
+          >
+            {sim ? "Stop simulator" : "Simulator"}
+          </button>
+        )}
       </footer>
       <LinkSettings s={s} open={settings} close={() => setSettings(false)} />
     </div>

@@ -401,7 +401,7 @@ export function AccessGate({
                   ? "Present your registered RFID card to unlock the machine controls."
                   : s?.preview
                     ? "This preview is simulator-only. A USB controller is never available here."
-                    : "Connect the machine controller, or start the simulator to review the console."}
+                    : "Connect the machine controller over USB to unlock with your RFID card."}
           </span>
         </div>
 
@@ -511,14 +511,6 @@ export function AccessGate({
                 onClick={loadPorts}
               >
                 <RefreshCw size={14} /> Refresh ports
-              </button>
-              <button
-                className="button small"
-                disabled={!online || Boolean(busy)}
-                onClick={startSimulator}
-              >
-                <Radio size={14} />
-                {busy === "sim" ? "Starting…" : "Use the simulator instead"}
               </button>
             </div>
           </div>
