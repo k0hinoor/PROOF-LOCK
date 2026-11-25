@@ -373,15 +373,20 @@ code {
   display: grid;
   place-items: center;
   padding: clamp(20px, 6vh, 64px) 18px;
+  position: relative;
+  z-index: 2;
 }
 .gate-card {
   width: min(420px, 100%);
   padding: 28px 26px;
   border-radius: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-bright);
   background: var(--panel);
+  color: var(--text);
   display: grid;
   gap: 18px;
+  position: relative;
+  isolation: isolate;
 }
 .gate-brand {
   display: flex;
@@ -1219,6 +1224,9 @@ code {
   border-top: 1px solid var(--line);
   color: var(--secondary);
   font-size: 12px;
+  position: relative;
+  z-index: 2;
+  background: var(--bg);
 }
 .console-foot span {
   display: inline-flex;
@@ -1579,7 +1587,7 @@ code {
 .ascii-fluid {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
   overflow: hidden;
 }
@@ -1741,6 +1749,8 @@ code {
   grid-template-columns: 200px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+  position: relative;
+  z-index: 2;
 }
 .side-nav {
   display: flex;
