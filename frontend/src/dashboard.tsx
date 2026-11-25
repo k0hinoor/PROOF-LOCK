@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AttendanceRow, Status } from "./types";
 import type { MachineView } from "./console";
 import { MotorPanel, GuardPanel } from "./console";
+import { MachinePerformance } from "./performance";
 
 type Range = "today" | "week" | "month";
 
@@ -280,6 +281,9 @@ export function OverviewDash({
 
   return (
     <div className="fit-grid">
+      <div className="fit-card perf-wrap">
+        <MachinePerformance s={s} view={view} online={online} />
+      </div>
       <section className="fit-card motor-wrap">
         <MotorPanel s={s} online={online} view={view} onCommand={onCommand} />
       </section>

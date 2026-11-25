@@ -308,10 +308,10 @@ export function AccessGate({
     <div className="gate">
       <div className="gate-card">
         <div className="gate-brand">
-          <img src="/prooflock.png" alt="" width={44} height={44} />
+          <img src="/prooflock.png" alt="ProofLock" />
           <div>
             <h1>ProofLock</h1>
-            <p>Machine guard control</p>
+            <p>Stop-verified guard lock</p>
           </div>
         </div>
 
@@ -1185,10 +1185,10 @@ export function ConsoleHeader({
   return (
     <header className="console-header">
       <a className="console-brand" href="#console">
-        <img src="/prooflock.png" alt="" width={34} height={34} />
+        <img src="/prooflock.png" alt="ProofLock" />
         <span>
           <b>ProofLock</b>
-          <small>MACHINE GUARD CONTROL</small>
+          <small>STOP-VERIFIED GUARD LOCK</small>
         </span>
       </a>
       <div className="console-status">
