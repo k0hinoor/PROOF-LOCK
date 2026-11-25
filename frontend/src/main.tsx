@@ -186,7 +186,7 @@ function Console() {
 
   return (
     <div className="console-shell">
-      <AsciiFluid />
+      <AsciiFluid theme={theme} />
       <ConsoleHeader
         s={s}
         online={online}
