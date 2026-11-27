@@ -6,7 +6,6 @@ import {
   ChevronDown,
   CircleAlert,
   ClipboardList,
-  Gauge,
   Lock,
   Menu,
   Radio,
@@ -22,7 +21,6 @@ import {
   machineView,
 } from "./console";
 import {
-  Chart,
   DetailRows,
   EventDetail,
   EventTable,
@@ -30,6 +28,7 @@ import {
   display,
 } from "./components";
 import { OverviewDash } from "./dashboard";
+import { MachinePerformance } from "./performance";
 import AsciiFluid from "./ascii-fluid";
 import { age, api, useClock, useEvents, useMonitor, usePreference } from "./lib";
 import type { Record, Status } from "./types";
@@ -88,18 +87,6 @@ function Maintenance({ s, online }: { s?: Status; online: boolean }) {
                   : "Unknown",
             ],
           ]}
-        />
-      </Section>
-      <Section
-        title="Raw standstill signal"
-        description="For bench calibration only"
-        action={<Gauge size={17} className="dim" />}
-      >
-        <Chart
-          samples={samples}
-          range={range}
-          setRange={setRange}
-          stale={!s?.fresh}
         />
       </Section>
       <Section
@@ -199,7 +186,7 @@ function Console() {
 
   return (
     <div className="console-shell">
-      <AsciiFluid />
+      <AsciiFluid theme={theme} />
       <ConsoleHeader
         s={s}
         online={online}

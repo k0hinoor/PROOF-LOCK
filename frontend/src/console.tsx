@@ -7,7 +7,6 @@ import {
   CircleAlert,
   Cable,
   CircleDot,
-  Fan,
   FilePlus2,
   Fingerprint,
   LockKeyhole,
@@ -24,6 +23,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { api, clock, dateTime } from "./lib";
+import Propeller from "./propeller";
 import { LiquidGlassThemeToggle } from "./theme-toggle";
 import type { AttendanceRow, Status } from "./types";
 
@@ -138,91 +138,21 @@ export function machineView(s?: Status, online = true): MachineView {
 }
 
 /* ------------------------------------------------------------------ */
-/* Fan                                                                 */
+/* Motor mark                                                          */
 /* ------------------------------------------------------------------ */
 
 export function FanRotor({
   view,
-  size = 210,
+  size = 200,
 }: {
   view: MachineView;
   size?: number;
 }) {
-  const [speed, setSpeed] = useState(0); // degrees per second
-  const angle = useRef(0);
-  const last = useRef(performance.now());
-  const [render, setRender] = useState(0);
-  const target =
-    view.motor === "RUNNING"
-      ? 520
-      : view.motor === "STOPPING"
-        ? 520 * clamp(view.level) ** 0.8
-        : 0;
-
-  useEffect(() => {
-    let frame = 0;
-    const step = (now: number) => {
-      const dt = Math.min(0.1, (now - last.current) / 1000);
-      last.current = now;
-      // Ease toward the reported state, so STOPPING visibly decelerates.
-      setSpeed((v) =>
-        Math.abs(target - v) < 1
-          ? target
-          : v + (target - v) * Math.min(1, dt * 2.2),
-      );
-      frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [target]);
-
-  useEffect(() => {
-    let frame = 0;
-    let previous = performance.now();
-    const step = (now: number) => {
-      const dt = (now - previous) / 1000;
-      previous = now;
-      if (speed > 0.2) {
-        angle.current = (angle.current + speed * dt) % 360;
-        setRender((n) => n + 1);
-      }
-      frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [speed]);
-
-  const moving = speed > 0.2;
-  const blur = clamp(speed / 1300, 0, 0.55);
+  const spinning = view.motor === "RUNNING" || view.motor === "STOPPING";
+  const speed = view.motor === "RUNNING" ? 1.05 : 2.2;
   return (
-    <div
-      className={`rotor ${moving ? "moving" : "still"} ${view.tone}`}
-      style={{ width: size, height: size }}
-      role="img"
-      aria-label={`Motor ${view.motor.toLowerCase()}`}
-      data-angle={render}
-    >
-      <svg viewBox="0 0 200 200" width={size} height={size} aria-hidden="true">
-        <circle className="rotor-ring" cx="100" cy="100" r="94" />
-        <circle className="rotor-ring inner" cx="100" cy="100" r="72" />
-        <g
-          className="rotor-blades"
-          style={{ transform: `rotate(${angle.current}deg)` }}
-        >
-          {[0, 60, 120, 180, 240, 300].map((deg) => (
-            <g key={deg} transform={`rotate(${deg} 100 100)`}>
-              <path d="M100 100 C 116 84, 124 58, 112 30 C 100 40, 92 62, 94 86 Z" />
-            </g>
-          ))}
-        </g>
-        <circle className="rotor-hub" cx="100" cy="100" r="15" />
-        <circle className="rotor-hub-dot" cx="100" cy="100" r="4" />
-        {moving && (
-          <g className="rotor-motion" style={{ opacity: blur }}>
-            <circle cx="100" cy="100" r="56" />
-          </g>
-        )}
-      </svg>
+    <div className="motor-prop" style={{ width: size }}>
+      <Propeller size={size} speed={speed} spinning={spinning} />
       <span className="rotor-caption">{view.motor}</span>
     </div>
   );
@@ -378,10 +308,10 @@ export function AccessGate({
     <div className="gate">
       <div className="gate-card">
         <div className="gate-brand">
-          <img src="/prooflock.png" alt="" width={44} height={44} />
+          <img src="/prooflock.png" alt="ProofLock" />
           <div>
             <h1>ProofLock</h1>
-            <p>Machine guard control</p>
+            <p>Stop-verified guard lock</p>
           </div>
         </div>
 
@@ -1255,10 +1185,10 @@ export function ConsoleHeader({
   return (
     <header className="console-header">
       <a className="console-brand" href="#console">
-        <img src="/prooflock.png" alt="" width={34} height={34} />
+        <img src="/prooflock.png" alt="ProofLock" />
         <span>
           <b>ProofLock</b>
-          <small>MACHINE GUARD CONTROL</small>
+          <small>STOP-VERIFIED GUARD LOCK</small>
         </span>
       </a>
       <div className="console-status">

@@ -191,9 +191,10 @@ export function Chart({
       {path ? (
         <div className={stale ? "chart-wrap stale" : "chart-wrap"}>
           <svg
+            className={stale ? "chart stale" : "chart"}
             viewBox="0 0 755 226"
             role="img"
-            aria-label={`Back-EMF ADC readings over the last ${range} seconds. Vertical axis zero to 1024 counts.`}
+            aria-label={`Standstill sensor readings over the last ${range} seconds. Vertical axis zero to 1024 counts.`}
             onPointerLeave={() => setHover(undefined)}
             onPointerMove={(e) => {
               const matrix = e.currentTarget.getScreenCTM();
@@ -205,6 +206,10 @@ export function Chart({
             }}
           >
             <defs>
+              <linearGradient id={`${clip}-fill`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--cyan)" stopOpacity="0.55" />
+                <stop offset="100%" stopColor="var(--cyan)" stopOpacity="0.06" />
+              </linearGradient>
               <clipPath id={clip}>
                 <rect x="52" y="20" width="685" height="175" />
               </clipPath>
@@ -232,13 +237,18 @@ export function Chart({
                 </g>
               );
             })}
-            <path className="trace-fill" d={fill} clipPath={`url(#${clip})`} />
+            <path
+              className="trace-fill"
+              d={fill}
+              fill={`url(#${clip}-fill)`}
+              clipPath={`url(#${clip})`}
+            />
             <path className="trace" d={path} clipPath={`url(#${clip})`} />
             {selected?.adc != null && (
-              <circle cx={X(selected.at)} cy={Y(selected.adc)} r="4" />
+              <circle className="trace-dot" cx={X(selected.at)} cy={Y(selected.adc)} r="4" />
             )}
             {!selected && visible.length === 1 && visible[0].adc != null && (
-              <circle cx={X(visible[0].at)} cy={Y(visible[0].adc)} r="3" />
+              <circle className="trace-dot" cx={X(visible[0].at)} cy={Y(visible[0].adc)} r="3" />
             )}
           </svg>
         </div>

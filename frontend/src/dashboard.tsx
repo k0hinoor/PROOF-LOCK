@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AttendanceRow, Status } from "./types";
 import type { MachineView } from "./console";
 import { MotorPanel, GuardPanel } from "./console";
+import { MachinePerformance } from "./performance";
 
 type Range = "today" | "week" | "month";
 
@@ -108,13 +109,13 @@ function LineChart({
           points={pts.join(" ")}
           fill="none"
           stroke="var(--lilac)"
-          strokeWidth="2"
+          strokeWidth="2.8"
           strokeLinejoin="round"
           strokeLinecap="round"
         />
       )}
       {values.map((v, i) => (
-        <circle key={i} cx={x(i)} cy={y(v)} r="3" fill="var(--lilac)" />
+        <circle key={i} cx={x(i)} cy={y(v)} r="3.5" fill="var(--lilac)" />
       ))}
       {labels.map((label, i) =>
         i % Math.ceil(labels.length / 7) === 0 ? (
@@ -280,6 +281,9 @@ export function OverviewDash({
 
   return (
     <div className="fit-grid">
+      <div className="fit-card perf-wrap">
+        <MachinePerformance s={s} view={view} online={online} />
+      </div>
       <section className="fit-card motor-wrap">
         <MotorPanel s={s} online={online} view={view} onCommand={onCommand} />
       </section>
@@ -335,8 +339,8 @@ export function OverviewDash({
         <h3>Granted vs denied</h3>
         <Donut
           slices={[
-            { label: "Granted", value: granted || 0, color: "#c4b5fd" },
-            { label: "Denied", value: denied || 0, color: "#e8d36a" },
+            { label: "Granted", value: granted || 0, color: "var(--lilac)" },
+            { label: "Denied", value: denied || 0, color: "var(--amber)" },
           ].filter((s) => s.value > 0)}
         />
       </section>
