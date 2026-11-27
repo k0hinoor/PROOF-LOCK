@@ -36,15 +36,15 @@ import "./style.css";
 
 function Maintenance({ s, online }: { s?: Status; online: boolean }) {
   const source = s?.source ?? "live";
-  const [range, setRange] = useState(120);
   const [event, setEvent] = useState<Record>();
   const history = useEvents(
     `source=${source}&category=control&limit=12`,
     s?.revision,
   );
-  const samples = s?.samples ?? [];
+  const view = machineView(s, online);
   return (
     <div className="maintenance">
+      <MachinePerformance s={s} view={view} online={online} />
       <Section
         title="Controller diagnostics"
         description="Kept out of the operator screen on purpose"
