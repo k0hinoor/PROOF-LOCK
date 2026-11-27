@@ -308,7 +308,7 @@ export function AccessGate({
     <div className="gate">
       <div className="gate-card">
         <div className="gate-brand">
-          <img src="/prooflock.png" alt="ProofLock" />
+          <img src="/prooflock.png" alt="ProofLock — stop-verified guard lock" />
           <div>
             <h1>ProofLock</h1>
             <p>Stop-verified guard lock</p>

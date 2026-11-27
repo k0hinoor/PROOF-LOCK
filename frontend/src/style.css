@@ -285,17 +285,18 @@ code {
   height: 52px;
   width: auto;
   max-width: 220px;
-  object-fit: contain;
-  background: transparent;
-  border-radius: 0;
+  object-fit: cover;
+  background: #10182a;
+  border-radius: 8px;
 }
 .gate-brand img {
-  width: min(280px, 70%);
+  width: min(320px, 100%);
   height: auto;
-  max-height: 180px;
+  max-height: 200px;
   object-fit: contain;
-  background: transparent;
-  border-radius: 0;
+  background: #10182a;
+  border-radius: 14px;
+  display: block;
 }
 .console-brand b {
   display: block;
@@ -393,18 +394,15 @@ code {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 10px;
+  gap: 0;
 }
-.gate-brand h1 {
-  font-size: 20px;
-  letter-spacing: 0.02em;
-  line-height: 1.1;
-  font-weight: 650;
-}
+.gate-brand h1,
 .gate-brand p {
-  color: var(--secondary);
-  font-size: 12px;
-  letter-spacing: 0.05em;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
 }
 .scan {
   display: grid;
