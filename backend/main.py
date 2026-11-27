@@ -185,26 +185,37 @@ class Runtime:
 def seed_preview_history(monitor):
     """Fill the preview database so every chart has something to draw."""
     store = monitor.store
-    if not store:
-        return
-    if next(store.rows('attendance', 'simulator', limit=1), None):
-        return
     now = time.time()
-    crew = (('OP-01', 'Engineer A'), ('OP-02', 'Engineer B'), ('OP-03', 'Engineer C'))
-    seq = 1
-    for day in range(6, -1, -1):
-        for i, (ref, name) in enumerate(crew):
-            at = now - day * 86400 + 7 * 3600 + i * 3600
-            store.attendance_event(at, 'simulator', ref, name, 'ACCEPTED')
-            if day % 2 == 0 and i == 0:
-                store.attendance_event(at + 45, 'simulator', 'OP-99', 'Unknown', 'DENIED')
-            store.command(at + 90, 'simulator', ref, name, 'MOTOR_ON', 1, 'accepted')
-            store.command(at + 400, 'simulator', ref, name, 'MOTOR_OFF', 1, 'accepted')
-            store.event(at + 90, 'simulator', 'console', 'control', 'MOTOR_ON',
-                        'INFO', f'{ref} start', seq, {})
-            seq += 1
-    for i in range(80):
-        store.sample(now - (80 - i) * 2, 'simulator', 5 + (i % 10) * 4, i)
+    already = bool(store and next(store.rows('attendance', 'simulator', limit=1), None))
+    if store and not already:
+        crew = (('OP-01', 'Engineer A'), ('OP-02', 'Engineer B'), ('OP-03', 'Engineer C'))
+        seq = 1
+        for day in range(6, -1, -1):
+            for i, (ref, name) in enumerate(crew):
+                at = now - day * 86400 + 7 * 3600 + i * 3600
+                store.attendance_event(at, 'simulator', ref, name, 'ACCEPTED')
+                if day % 2 == 0 and i == 0:
+                    store.attendance_event(at + 45, 'simulator', 'OP-99', 'Unknown', 'DENIED')
+                store.command(at + 90, 'simulator', ref, name, 'MOTOR_ON', 1, 'accepted')
+                store.command(at + 400, 'simulator', ref, name, 'MOTOR_OFF', 1, 'accepted')
+                store.event(at + 90, 'simulator', 'console', 'control', 'MOTOR_ON',
+                            'INFO', f'{ref} start', seq, {})
+                seq += 1
+    # Idle ADC sits at ~4 counts on a 0–1024 axis, so a 60s window looks empty
+    # unless the live deque has a recent run. Always restock the trail.
+    peak = max((row.get('adc') or 0) for row in list(monitor.samples)[-30:]) if monitor.samples else 0
+    if peak < 80:
+        for i in range(120):
+            at = now - (120 - i)
+            if 30 <= i < 80:
+                adc = 500 + (i % 15) * 6
+            elif 80 <= i < 100:
+                adc = max(5, 500 - (i - 80) * 24)
+            else:
+                adc = 4 + i % 3
+            monitor.samples.append({'at': at, 'adc': adc})
+            if store and not already:
+                store.sample(at, 'simulator', adc, i)
 
 
 @asynccontextmanager

@@ -493,8 +493,17 @@ function createAsciiFluid(
     }
 
     const dark = resolveDark(p.theme);
-    const ink = hexToRgb(p.color ?? (dark ? DARK.ink : LIGHT.ink));
-    const paper = hexToRgb(p.backgroundColor ?? (dark ? DARK.paper : LIGHT.paper));
+    const css = getComputedStyle(document.documentElement);
+    const ink = hexToRgb(
+      p.color ||
+        css.getPropertyValue("--text").trim() ||
+        (dark ? DARK.ink : LIGHT.ink),
+    );
+    const paper = hexToRgb(
+      p.backgroundColor ||
+        css.getPropertyValue("--bg").trim() ||
+        (dark ? DARK.paper : LIGHT.paper),
+    );
     const texel = [1 / SIM, 1 / SIM] as const;
     const aspect = canvas.width / Math.max(canvas.height, 1);
     const brushR = 0.00012 + Math.max(0.05, Math.min(1, p.brush)) * 0.0011;

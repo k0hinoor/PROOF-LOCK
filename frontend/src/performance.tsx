@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Activity, Clock3, ShieldCheck, Zap } from "lucide-react";
 import type { MachineView } from "./console";
 import type { Sample, Status } from "./types";
@@ -48,6 +48,7 @@ export function MachinePerformance({
 }) {
   const [range, setRange] = useState<WindowSec>(60);
   const [hover, setHover] = useState<number>();
+  const fillId = `perf-fill-${useId().replaceAll(":", "")}`;
   const samples = s?.samples ?? [];
   const lastAt = samples.at(-1)?.at ?? Date.now() / 1000;
   const min = lastAt - range;
@@ -166,7 +167,7 @@ export function MachinePerformance({
             }}
           >
             <defs>
-              <linearGradient id="perf-fill" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="var(--peach)" stopOpacity="0.45" />
                 <stop offset="100%" stopColor="var(--peach)" stopOpacity="0.02" />
               </linearGradient>
@@ -199,7 +200,7 @@ export function MachinePerformance({
                 </text>
               );
             })}
-            <path d={area} fill="url(#perf-fill)" />
+            <path d={area} fill={`url(#${fillId})`} />
             <path d={line} className="perf-line peach" />
             {selected?.adc != null && (
               <>
